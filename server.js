@@ -18,7 +18,7 @@ const openai = new OpenAI({
 
 app.post('/api/chat', async (req, res) => {
   try {
-    const { message, location } = req.body;
+    const { messages, location } = req.body;
 
     const currentTime = new Date().toLocaleString('el-GR', { timeZone: 'Europe/Athens' });
     let systemContext = `Είσαι ο 'Γιάννης', ένας φιλικός φωνητικός βοηθός. Απάντα σύντομα (1-2 προτάσεις) στα ελληνικά. Τρέχουσα ώρα: ${currentTime}.`;
@@ -27,12 +27,14 @@ app.post('/api/chat', async (req, res) => {
       systemContext += ` Το γεωγραφικό πλάτος/μήκος του χρήστη είναι (${location.lat}, ${location.lon}).`;
     }
 
+    let fullMessages = [
+      { role: "system", content: systemContext },
+      ...messages
+    ];
+
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: systemContext },
-        { role: "user", content: message }
-      ],
+      messages: fullMessages,
       max_tokens: 150
     });
 
