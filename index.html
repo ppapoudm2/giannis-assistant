@@ -1,246 +1,177 @@
+<!-- public/index.html - Πλήρης κώδικας frontend με Live Token Counter και Εντοπισμό Πόλης -->
 <!DOCTYPE html>
 <html lang="el">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Γιάννη - Voice Assistant</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Γιάννης - Assistant</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+        #chat-container {
+            width: 100%;
+            max-width: 600px;
+            background: #1e1e1e;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        #messages {
+            height: 350px;
+            overflow-y: auto;
+            border: 1px solid #333;
+            padding: 10px;
+            border-radius: 5px;
+            background: #181818;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .message {
+            padding: 8px 12px;
+            border-radius: 6px;
+            max-width: 80%;
+        }
+        .user { background: #0056b3; align-self: flex-end; }
+        .assistant { background: #333; align-self: flex-start; }
+        .input-area {
+            display: flex;
+            gap: 10px;
+        }
+        input[type="text"] {
+            flex: 1;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #444;
+            background: #2a2a2a;
+            color: #fff;
+        }
+        button {
+            padding: 10px 20px;
+            border: none;
+            background: #00ffcc;
+            color: #000;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover { background: #00b38f; }
+    </style>
 </head>
-<body class="bg-gray-900 text-white min-h-screen flex flex-col font-sans select-none" onclick="startHandsFree()">
+<body>
 
-  <header class="p-6 border-b border-gray-800 text-center">
-    <p class="text-xs uppercase tracking-widest text-indigo-400 font-semibold">Voice Assistant</p>
-    <h1 class="text-3xl font-bold mt-1">Γιάννη</h1>
-  </header>
-
-  <main class="flex-1 max-w-2xl w-full mx-auto p-4 flex flex-col justify-between">
-    <div class="text-center my-4">
-      <div id="status-icon" class="w-20 h-20 mx-auto mb-3 rounded-full bg-indigo-600/20 text-indigo-400 flex items-center justify-center text-3xl transition-all duration-300">
-        <i class="fas fa-microphone"></i>
-      </div>
-      <p id="status-text" class="text-gray-400 text-base font-medium">Ακουμπήστε οπουδήποτε στην οθόνη για ενεργοποίηση</p>
+    <div id="chat-container">
+        <h2>Γιάννης AI</h2>
+        <div id="messages"></div>
+        <div class="input-area">
+            <input type="text" id="userInput" placeholder="Πληκτρολόγησε μήνυμα...">
+            <button onclick="sendMessage()">Αποστολή</button>
+        </div>
     </div>
 
-    <!-- Live Camera Window -->
-    <div id="camera-container" class="hidden mb-4 relative rounded-2xl overflow-hidden border border-gray-700 bg-black max-h-48 flex justify-center items-center">
-      <video id="webcam" autoplay playsinline class="w-full h-auto object-cover max-h-48"></video>
-      <canvas id="canvas" class="hidden"></canvas>
-      <div class="absolute top-2 left-2 bg-red-600/80 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
-        <span class="w-2 h-2 rounded-full bg-white animate-ping"></span> Live Camera
-      </div>
-    </div>
+    <script>
+        // --- Live Token Counter & City Detection UI ---
+        const tokenDisplay = document.createElement("div");
+        tokenDisplay.id = "token-counter";
+        tokenDisplay.style.position = "fixed";
+        tokenDisplay.style.top = "10px";
+        tokenDisplay.style.right = "10px";
+        tokenDisplay.style.background = "rgba(0, 0, 0, 0.8)";
+        tokenDisplay.style.color = "#00ffcc";
+        tokenDisplay.style.padding = "8px 14px";
+        tokenDisplay.style.borderRadius = "8px";
+        tokenDisplay.style.fontSize = "12px";
+        tokenDisplay.style.zIndex = "9999";
+        tokenDisplay.style.border = "1px solid #00ffcc";
+        tokenDisplay.innerHTML = "Tokens: 0 | Πόλη: Εντοπισμός...";
+        document.body.appendChild(tokenDisplay);
 
-    <div id="chat-box" class="flex-1 bg-gray-800/50 rounded-2xl p-4 overflow-y-auto max-h-[50vh] space-y-3 border border-gray-700/50 mb-4">
-      <p class="text-xs text-center text-gray-500 default-msg">Πες «Γιάννη» για να ξεκινήσεις τη συνομιλία.</p>
-    </div>
-  </main>
+        let totalSessionTokens = 0;
+        window.currentDetectedCity = "Κόρινθος"; // Default fallback
 
-  <script>
-    const WAKE_WORD = "γιάννη";
-    const STOP_WORDS = ["σταμάτα", "σταματα", "τέλος", "τελος", "σώπα", "σωπα", "κλείσε"];
-    const CAMERA_TOGGLE_WORDS = ["κάμερα", "καμερα"];
-    const VISION_WORDS = ["δες", "κοίτα", "κοιτα", "τι βλέπεις", "τι βλεπεις"];
-
-    const chatBox = document.getElementById('chat-box');
-    const statusText = document.getElementById('status-text');
-    const statusIcon = document.getElementById('status-icon');
-    const cameraContainer = document.getElementById('camera-container');
-    const videoElement = document.getElementById('webcam');
-    const canvasElement = document.getElementById('canvas');
-
-    let recognition;
-    let isListening = false;
-    let isSpeaking = false;
-    let isActiveSession = false;
-    let isRequestPending = false;
-    let autoStarted = false;
-    let userLocation = null;
-    let cameraStream = null;
-
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => { userLocation = { lat: pos.coords.latitude, lon: pos.coords.longitude }; },
-        (err) => console.log("Geolocation error:", err)
-      );
-    }
-
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = false;
-      recognition.lang = 'el-GR';
-
-      recognition.onresult = async (event) => {
-        if (isSpeaking || isRequestPending) return;
-
-        const lastResultIndex = event.results.length - 1;
-        const transcript = event.results[lastResultIndex][0].transcript.trim().toLowerCase();
-
-        // 1. Έλεγχος τερματισμού
-        if (STOP_WORDS.some(word => transcript.includes(word))) {
-          isActiveSession = false;
-          stopCamera();
-          updateStatusUI("Σε αναμονή... (Πες «Γιάννη»)", false);
-          const exitMsg = "Εντάξει, σταματάω.";
-          addMessage('assistant', exitMsg);
-          speak(exitMsg);
-          return;
+        function updateTokenUI(usage, city) {
+            if (usage && usage.total_tokens) {
+                totalSessionTokens += usage.total_tokens;
+            }
+            const activeCity = city || window.currentDetectedCity;
+            tokenDisplay.innerHTML = `Tokens: ${totalSessionTokens} (Τελευταίο: ${usage ? usage.total_tokens : 0}) | Πόλη: ${activeCity}`;
         }
 
-        // 2. Έλεγχος Wake Word
-        if (!isActiveSession) {
-          if (transcript.includes(WAKE_WORD)) {
-            isActiveSession = true;
-            updateStatusUI("Ενεργός - Ακούω...", true);
-            const greeting = "Σε άκουσα! Πώς μπορώ να βοηθήσω;";
-            addMessage('assistant', greeting);
-            speak(greeting);
-          }
-          return; // Διορθώθηκε: Σταματάει εδώ για να μην στείλει κενό αίτημα στο API
-        }
-
-        let cleanPrompt = transcript;
-        if (cleanPrompt.startsWith(WAKE_WORD)) {
-          cleanPrompt = cleanPrompt.replace(WAKE_WORD, '').trim();
-        }
-
-        if (!cleanPrompt) return; // Διορθώθηκε: Αν δεν υπάρχει εντολή μετά το "Γιάννη", περιμένει
-
-        addMessage('user', transcript);
-
-        // 3. ON / OFF Κάμερας (Toggle)
-        if (CAMERA_TOGGLE_WORDS.some(word => cleanPrompt === word || cleanPrompt.includes("άνοιξε κάμερα") || cleanPrompt.includes("κλείσε κάμερα"))) {
-          if (cameraStream) {
-            stopCamera();
-            const msg = "Έκλεισα την κάμερα.";
-            addMessage('assistant', msg);
-            speak(msg);
-          } else {
-            await startCamera();
-            const msg = "Άνοιξα την κάμερα.";
-            addMessage('assistant', msg);
-            speak(msg);
-          }
-          return;
-        }
-
-        // 4. Ερώτηση με ανάλυση εικόνας μόνο όταν ζητηθεί ρητά
-        if (VISION_WORDS.some(word => cleanPrompt.includes(word))) {
-          if (!cameraStream) await startCamera();
-          setTimeout(() => {
-            const imageBase64 = captureImage();
-            askGemini(cleanPrompt, imageBase64);
-          }, 500);
+        // Αυτόματος εντοπισμός πόλης μέσω Geolocation
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(async (position) => {
+                const lat = position.coords.latitude;
+                const lon = position.coords.longitude;
+                try {
+                    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&accept-language=el`);
+                    const data = await res.json();
+                    const city = data.address.city || data.address.town || data.address.village || data.address.county || "Κόρινθος";
+                    window.currentDetectedCity = city;
+                    updateTokenUI(null, city);
+                } catch (e) {
+                    updateTokenUI(null, "Κόρινθος");
+                }
+            }, () => {
+                updateTokenUI(null, "Κόρινθος");
+            });
         } else {
-          askGemini(cleanPrompt, null);
+            updateTokenUI(null, "Κόρινθος");
         }
-      };
 
-      recognition.onend = () => {
-        if (isListening && !isSpeaking && !isRequestPending) {
-          try { recognition.start(); } catch (e) {}
+        // --- Λειτουργία αποστολής μηνύματος ---
+        async function sendMessage() {
+            const inputField = document.getElementById("userInput");
+            const messageText = inputField.value.trim();
+            if (!messageText) return;
+
+            const messagesDiv = document.getElementById("messages");
+            messagesDiv.innerHTML += `<div class="message user">${messageText}</div>`;
+            inputField.value = "";
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: messageText })
+                });
+
+                const data = await response.json();
+                
+                if (data.reply) {
+                    messagesDiv.innerHTML += `<div class="message assistant">${data.reply}</div>`;
+                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                }
+
+                // Ενημέρωση των tokens live στην οθόνη
+                if (data.usage) {
+                    updateTokenUI(data.usage, window.currentDetectedCity);
+                }
+
+            } catch (error) {
+                messagesDiv.innerHTML += `<div class="message assistant" style="color:red;">Σφάλμα σύνδεσης.</div>`;
+            }
         }
-      };
-    }
 
-    async function startHandsFree() {
-      if (autoStarted) return;
-      try {
-        await navigator.mediaDevices.getUserMedia({ audio: true });
-        if (recognition) {
-          recognition.start();
-          isListening = true;
-          autoStarted = true;
-          updateStatusUI("Σε αναμονή... (Πες «Γιάννη»)", false);
-        }
-      } catch (e) {
-        statusText.innerText = "Απαιτείται άδεια μικροφώνου!";
-      }
-    }
-
-    async function startCamera() {
-      try {
-        cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        videoElement.srcObject = cameraStream;
-        cameraContainer.classList.remove('hidden');
-      } catch (e) {
-        console.error("Camera error:", e);
-      }
-    }
-
-    function stopCamera() {
-      if (cameraStream) {
-        cameraStream.getTracks().forEach(track => track.stop());
-        cameraStream = null;
-        videoElement.srcObject = null;
-        cameraContainer.classList.add('hidden');
-      }
-    }
-
-    function captureImage() {
-      if (!videoElement.srcObject) return null;
-      const context = canvasElement.getContext('2d');
-      canvasElement.width = videoElement.videoWidth || 640;
-      canvasElement.height = videoElement.videoHeight || 480;
-      context.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
-      return canvasElement.toDataURL('image/jpeg', 0.6);
-    }
-
-    window.addEventListener('load', () => { startHandsFree(); });
-
-    function updateStatusUI(text, active) {
-      statusText.innerText = text;
-      if (active) statusIcon.classList.add('animate-pulse', 'text-red-400');
-      else statusIcon.classList.remove('animate-pulse', 'text-red-400');
-    }
-
-    async function askGemini(promptText, imageBase64) {
-      isRequestPending = true;
-      updateStatusUI("Σκέφτομαι...", true);
-      try {
-        const payload = { prompt: promptText, location: userLocation, image: imageBase64 };
-        const res = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+        // Υποστήριξη Enter στο input
+        document.getElementById("userInput").addEventListener("keypress", function(event) {
+            if (event.key === "Enter") {
+                sendMessage();
+            }
         });
-        const data = await res.json();
-        const reply = data.text || "Δεν μπορώ να απαντήσω αυτή τη στιγμή.";
-        
-        updateStatusUI("Ενεργός - Ακούω...", true);
-        addMessage('assistant', reply);
-        speak(reply);
-      } catch (err) {
-        updateStatusUI("Σφάλμα σύνδεσης", false);
-        addMessage('assistant', "Σφάλμα επικοινωνίας.");
-      } finally {
-        isRequestPending = false;
-      }
-    }
-
-    function speak(text) {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'el-GR';
-        utterance.onstart = () => { isSpeaking = true; if (recognition) recognition.stop(); };
-        utterance.onend = () => {
-          isSpeaking = false;
-          if (isListening && recognition && !isRequestPending) { try { recognition.start(); } catch (e) {} }
-        };
-        window.speechSynthesis.speak(utterance);
-      }
-    }
-
-    function addMessage(sender, content) {
-      const msgDiv = document.createElement('div');
-      msgDiv.className = `p-3 rounded-xl max-w-[80%] ${sender === 'user' ? 'bg-indigo-600/30 ml-auto text-right' : 'bg-gray-700/50 mr-auto text-left'}`;
-      msgDiv.innerText = content;
-      chatBox.appendChild(msgDiv);
-      chatBox.scrollTop = chatBox.scrollHeight;
-    }
-  </script>
+    </script>
 </body>
 </html>
