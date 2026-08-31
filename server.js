@@ -18,7 +18,7 @@ const openai = new OpenAI({
 
 app.post('/api/chat', async (req, res) => {
   try {
-    const { message, location, image } = req.body;
+    const { message, location } = req.body;
 
     const currentTime = new Date().toLocaleString('el-GR', { timeZone: 'Europe/Athens' });
     let systemContext = `Είσαι ο 'Γιάννης', ένας φιλικός φωνητικός βοηθός. Απάντα σύντομα (1-2 προτάσεις) στα ελληνικά. Τρέχουσα ώρα: ${currentTime}.`;
@@ -27,38 +27,22 @@ app.post('/api/chat', async (req, res) => {
       systemContext += ` Το γεωγραφικό πλάτος/μήκος του χρήστη είναι (${location.lat}, ${location.lon}).`;
     }
 
-    let messages = [
-      { role: "system", content: systemContext }
-    ];
-
-    if (image) {
-      messages.push({
-        role: "user",
-        content: [
-          { type: "text", text: message && message.trim() !== '' ? message : "Τι βλέπεις εδώ;" },
-          { type: "image_url", image_url: { url: image } }
-        ]
-      });
-    } else {
-      messages.push({
-        role: "user",
-        content: message && message.trim() !== '' ? message : "Γεια σου Γιάννη!"
-      });
-    }
-
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      messages: messages,
+      messages: [
+        { role: "system", content: systemContext },
+        { role: "user", content: message }
+      ],
       max_tokens: 150
     });
 
-    const replyText = response.choices[0].message.content || "Δεν κατάλαβα, μπορείς να το επαναλάβεις;";
-    const usage = response.usage; // Επιστρέφει κανονικά τα tokens για το live counter στο UI
-
-    res.json({ reply: replyText, usage: usage });
+    res.json({
+      reply: response.choices[0].message.content,
+      usage: response.usage
+    });
   } catch (error) {
-    console.error("OpenAI API Error Detail:", error);
-    res.status(500).json({ error: 'Πρόβλημα επικοινωνίας με το OpenAI API', details: error.message });
+    console.error("OpenAI Error:", error);
+    res.status(500).json({ error: 'Σφάλμα επικοινωνίας' });
   }
 });
 
