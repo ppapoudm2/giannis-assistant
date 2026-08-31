@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import OpenAI from 'openai';
+import { GoogleGenAI } from '@google/genai';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,9 +12,8 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(__dirname));
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+const apiKey = process.env.GEMINI_API_KEY;
+const ai = new GoogleGenAI({ apiKey: apiKey });
 
 app.post('/api/chat', async (req, res) => {
   try {
@@ -27,38 +26,38 @@ app.post('/api/chat', async (req, res) => {
       systemContext += ` Το γεωγραφικό πλάτος/μήκος του χρήστη είναι (${location.lat}, ${location.lon}).`;
     }
 
-    let messages = [
-      { role: "system", content: systemContext }
-    ];
-
+    let contentsArray = [];
     if (image) {
-      messages.push({
-        role: "user",
-        content: [
-          { type: "text", text: prompt && prompt.trim() !== '' ? prompt : "Τι βλέπεις εδώ;" },
-          { type: "image_url", image_url: { url: image } }
-        ]
-      });
-    } else {
-      messages.push({
-        role: "user",
-        content: prompt && prompt.trim() !== '' ? prompt : "Γεια σου Γιάννη!"
+      const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
+      contentsArray.push({
+        inlineData: {
+          data: base64Data,
+          mimeType: 'image/jpeg'
+        }
       });
     }
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: messages,
-      max_tokens: 150
+    contentsArray.push({ text: prompt && prompt.trim() !== '' ? prompt : "Γεια σου Γιάννη!" });
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.0-flash',
+      contents: contentsArray,
+      config: {
+        systemInstruction: {
+          parts: [{ text: systemContext }]
+        }
+      }
     });
 
-    const replyText = response.choices[0].message.content || "Δεν κατάλαβα, μπορείς να το επαναλάβεις;";
-    const usage = response.usage; // Προσθέτουμε ξανά τα tokens χωρίς να χαλάσουμε τίποτα
+    const replyText = response.text || "Δεν κατάλαβα, μπορείς να το επαναλάβεις;";
+    
+    // Παίρνουμε τα tokens από το Gemini αν υπάρχουν διαθέσιμα
+    const usage = response.usageMetadata ? { total_tokens: response.usageMetadata.totalTokenCount } : null;
 
     res.json({ text: replyText, usage: usage });
   } catch (error) {
-    console.error("OpenAI API Error Detail:", error);
-    res.status(500).json({ error: 'Πρόβλημα επικοινωνίας με το OpenAI API', details: error.message });
+    console.error("Gemini API Error Detail:", error);
+    res.status(500).json({ error: 'Πρόβλημα επικοινωνίας με το Gemini API', details: error.message });
   }
 });
 
