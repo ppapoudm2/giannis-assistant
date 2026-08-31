@@ -38,12 +38,11 @@ app.post('/api/chat', async (req, res) => {
                 });
                 const html = await response.text();
                 
-                // Εξαγωγή των snippets αποτελεσμάτων με regex
                 const regex = /<a class="result__snippet[^>]*>(.*?)<\/a>/g;
                 let matches;
                 let snippets = [];
                 while ((matches = regex.exec(html)) !== null && snippets.length < 3) {
-                    const cleanText = matches[1].replace(/<\/?[^>]+(>|$)/g, ""); // Αφαίρεση HTML tags
+                    const cleanText = matches[1].replace(/<\/?[^>]+(>|$)/g, "");
                     snippets.push(cleanText);
                 }
 
