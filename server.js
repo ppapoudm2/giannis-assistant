@@ -39,9 +39,9 @@ app.post('/api/chat', async (req, res) => {
 
     contentsArray.push({ text: prompt && prompt.trim() !== '' ? prompt : "Γεια σου Γιάννη!" });
 
-    // Χρήση του σταθερού μοντέλου gemini-2.5-flash για αποφυγή ορίων quota
+    // Χρήση του gemini-3.6-flash-lite
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-3.6-flash-lite',
       contents: contentsArray,
       config: {
         systemInstruction: {
