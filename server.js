@@ -18,7 +18,7 @@ const openai = new OpenAI({
 
 app.post('/api/chat', async (req, res) => {
   try {
-    const { prompt, location, image } = req.body;
+    const { message, location, image } = req.body;
 
     const currentTime = new Date().toLocaleString('el-GR', { timeZone: 'Europe/Athens' });
     let systemContext = `Είσαι ο 'Γιάννης', ένας φιλικός φωνητικός βοηθός. Απάντα σύντομα (1-2 προτάσεις) στα ελληνικά. Τρέχουσα ώρα: ${currentTime}.`;
@@ -35,14 +35,14 @@ app.post('/api/chat', async (req, res) => {
       messages.push({
         role: "user",
         content: [
-          { type: "text", text: prompt && prompt.trim() !== '' ? prompt : "Τι βλέπεις εδώ;" },
+          { type: "text", text: message && message.trim() !== '' ? message : "Τι βλέπεις εδώ;" },
           { type: "image_url", image_url: { url: image } }
         ]
       });
     } else {
       messages.push({
         role: "user",
-        content: prompt && prompt.trim() !== '' ? prompt : "Γεια σου Γιάννη!"
+        content: message && message.trim() !== '' ? message : "Γεια σου Γιάννη!"
       });
     }
 
@@ -53,7 +53,9 @@ app.post('/api/chat', async (req, res) => {
     });
 
     const replyText = response.choices[0].message.content || "Δεν κατάλαβα, μπορείς να το επαναλάβεις;";
-    res.json({ text: replyText });
+    const usage = response.usage; // Επιστρέφει κανονικά τα tokens για το live counter στο UI
+
+    res.json({ reply: replyText, usage: usage });
   } catch (error) {
     console.error("OpenAI API Error Detail:", error);
     res.status(500).json({ error: 'Πρόβλημα επικοινωνίας με το OpenAI API', details: error.message });
