@@ -1,136 +1,4 @@
-<!DOCTYPE html>
-<html lang="el">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Γιάννης - Προσωπικός Βοηθός</title>
-    <style>
-        :root {
-            --bg-color: #0f172a;
-            --card-bg: #1e293b;
-            --accent: #38bdf8;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --user-bubble: #0284c7;
-            --assistant-bubble: #334155;
-        }
-
-        body {
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-main);
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-        }
-
-        #app-container {
-            width: 100%;
-            max-width: 650px;
-            height: 90vh;
-            background: var(--card-bg);
-            border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        header {
-            padding: 20px;
-            background: rgba(15, 23, 42, 0.6);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        header h2 {
-            margin: 0;
-            font-size: 20px;
-            color: var(--accent);
-        }
-
-        .header-info {
-            font-size: 13px;
-            color: var(--text-muted);
-            text-align: right;
-            line-height: 1.4;
-        }
-
-        #messages {
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            scroll-behavior: smooth;
-        }
-
-        .message {
-            padding: 12px 16px;
-            border-radius: 14px;
-            max-width: 75%;
-            font-size: 15px;
-            line-height: 1.4;
-        }
-
-        .user { background: var(--user-bubble); color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
-        .assistant { background: var(--assistant-bubble); color: var(--text-main); align-self: flex-start; border-bottom-left-radius: 4px; border: 1px solid rgba(255, 255, 255, 0.05); }
-
-        #status-bar {
-            padding: 15px 20px;
-            background: rgba(15, 23, 42, 0.4);
-            border-top: 1px solid rgba(255, 255, 255, 0.05);
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .pulse-dot {
-            width: 12px;
-            height: 12px;
-            background-color: #ef4444;
-            border-radius: 50%;
-        }
-
-        .pulse-dot.active {
-            background-color: #22c55e;
-            box-shadow: 0 0 10px #22c55e;
-        }
-
-        #status-text {
-            font-size: 14px;
-            color: var(--text-muted);
-            font-weight: 500;
-        }
-    </style>
-</head>
-<body>
-
-    <div id="app-container">
-        <header>
-            <h2>✨ Γιάννης AI</h2>
-            <div class="header-info" id="headerInfo">
-                <div>Πόλη: Εντοπισμός...</div>
-                <div>Υπόλοιπο: <span id="remainingTokens">10000</span> | Τραβήχτηκαν: <span id="currentTokens">0</span></div>
-            </div>
-        </header>
-
-        <div id="messages"></div>
-
-        <div id="status-bar">
-            <div class="pulse-dot" id="pulseDot"></div>
-            <div id="status-text">Περιμένω τη λέξη «Γιάννη»...</div>
-        </div>
-    </div>
-
-    <script>
+<script>
         const messagesDiv = document.getElementById("messages");
         const statusText = document.getElementById("status-text");
         const pulseDot = document.getElementById("pulseDot");
@@ -139,13 +7,15 @@
         const headerInfo = document.getElementById("headerInfo");
 
         const INITIAL_LIMIT = 10000;
-        // Φόρτωση αποθηκευμένων tokens από το τοπικό ιστορικό του browser
-        let savedTokens = localStorage.getItem('giannis_total_used');
-        let totalUsedTokens = savedTokens ? parseInt(savedTokens) : 0;
+        
+        // Διαχείριση σταθερών credits στη μνήμη του browser
+        let savedRemaining = localStorage.getItem('giannis_remaining_tokens');
+        let totalRemainingTokens = savedRemaining !== null ? parseInt(savedRemaining) : INITIAL_LIMIT;
 
         let userLocation = null;
         let detectedCity = "Κόρινθος";
         let isListeningActive = false;
+        let isWaitingForCommand = false; // Νέα αυστηρή ασφάλεια
         let isAssistantSpeaking = false;
         let conversationHistory = [];
         let recognition = null;
@@ -171,8 +41,7 @@
         }
 
         function updateTokenUI(latestUsage = 0) {
-            const remaining = INITIAL_LIMIT - totalUsedTokens;
-            remainingTokensEl.innerText = remaining >= 0 ? remaining : 0;
+            remainingTokensEl.innerText = totalRemainingTokens;
             currentTokensEl.innerText = latestUsage;
             headerInfo.children[0].innerText = `Πόλη: ${detectedCity}`;
         }
@@ -188,6 +57,7 @@
             window.speechSynthesis.cancel();
             isAssistantSpeaking = false;
             isListeningActive = false;
+            isWaitingForCommand = false;
             pulseDot.classList.remove('active');
             statusText.innerText = "Περιμένω τη λέξη «Γιάννη»...";
         }
@@ -205,10 +75,9 @@
             const utterance = new SpeechSynthesisUtterance(text);
             if (selectedVoice) utterance.voice = selectedVoice;
             utterance.lang = 'el-GR';
-            utterance.rate = 1.05; // Ελαφρώς πιο γρήγορη και φυσική ομιλία
+            utterance.rate = 1.05;
             
             utterance.onend = () => {
-                // Ελαχιστοποίηση καθυστέρησης για μέγιστη ταχύτητα
                 setTimeout(() => {
                     isAssistantSpeaking = false;
                     if (recognition) {
@@ -217,9 +86,11 @@
                     if (isListeningActive) {
                         pulseDot.classList.add('active');
                         statusText.innerText = "Ενεργός - Περιμένω την ερώτησή σου...";
+                        isWaitingForCommand = true; // Τώρα περιμένει πράγματι εντολή
                     } else {
                         pulseDot.classList.remove('active');
                         statusText.innerText = "Περιμένω τη λέξη «Γιάννη»...";
+                        isWaitingForCommand = false;
                     }
                     if (callback) callback();
                 }, 300);
@@ -248,14 +119,26 @@
                     return;
                 }
 
+                // 1. Αν δεν είναι ενεργός, περιμένει αποκλειστικά τη λέξη "Γιάννη"
                 if (!isListeningActive) {
-                    // Ενεργοποίηση αθόρυβα με τη λέξη Γιάννη (χωρίς να μιλήσει καθόλου ο βοηθός)
                     if (speechResult.includes("γιάννη") || speechResult.includes("γιάννης")) {
                         isListeningActive = true;
+                        isWaitingForCommand = true;
                         pulseDot.classList.add('active');
                         statusText.innerText = 'Ενεργός - Περιμένω την ερώτησή σου...';
                     }
-                } else {
+                    return; // Αγνοεί οτιδήποτε άλλο ειπωθεί μέχρι να ακούσει το όνομα
+                }
+
+                // 2. Αν είναι ενεργός αλλά δεν έχει έρθει νέα ερώτηση (απλώς υπάρχει σιωπή ή άσχετοι ήχοι), δεν κάνει τίποτα
+                if (isListeningActive && isWaitingForCommand) {
+                    // Αν η φράση περιέχει μόνο το όνομα ή είναι κενή/άσχετη χωρίς ουσιαστική ερώτηση, την προσπερνάμε
+                    if (speechResult === "γιάννη" || speechResult === "γιάννης") {
+                        return; 
+                    }
+
+                    // Εδώ έχουμε κανονική ερώτηση
+                    isWaitingForCommand = false; // Κλειδώνει μέχρι να απαντήσει
                     appendMessage('user', speechResult);
                     conversationHistory.push({ role: "user", content: speechResult });
                     statusText.innerText = "Σκέφτομαι...";
@@ -272,8 +155,8 @@
                         let promptTokens = 0;
                         if (data.usage && data.usage.total_tokens) {
                             promptTokens = data.usage.total_tokens;
-                            totalUsedTokens += promptTokens;
-                            localStorage.setItem('giannis_total_used', totalUsedTokens);
+                            totalRemainingTokens = Math.max(0, totalRemainingTokens - promptTokens);
+                            localStorage.setItem('giannis_remaining_tokens', totalRemainingTokens);
                             updateTokenUI(promptTokens);
                         }
 
@@ -283,6 +166,7 @@
                         speak(data.reply);
                     } catch (err) {
                         statusText.innerText = "Σφάλμα σύνδεσης.";
+                        isWaitingForCommand = true;
                     }
                 }
             };
@@ -299,5 +183,3 @@
             } catch (e) {}
         }
     </script>
-</body>
-</html>
