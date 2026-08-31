@@ -87,6 +87,7 @@
         let userLocation = null;
         let detectedCity = "Κόρινθος";
         let isListeningActive = false;
+        let isSpeaking = false; // <-- Ασφάλεια για να μην ακούει τη δική του φωνή
         let conversationHistory = [];
 
         if (navigator.geolocation) {
@@ -113,10 +114,14 @@
 
         function speak(text, callback) {
             window.speechSynthesis.cancel();
+            isSpeaking = true; // Κλειδώνει το μικρόφωνο όσο μιλάει ο Γιάννης
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.lang = 'el-GR';
             utterance.rate = 1.0;
-            utterance.onend = () => { if (callback) callback(); };
+            utterance.onend = () => {
+                isSpeaking = false; // Ξεκλειδώνει όταν τελειώσει
+                if (callback) callback();
+            };
             window.speechSynthesis.speak(utterance);
         }
 
@@ -130,6 +135,9 @@
             recognition.interimResults = false;
 
             recognition.onresult = async (event) => {
+                // Αν μιλάει ο Γιάννης αυτή τη στιγμή, αγνοούμε εντελώς ό,τι ακούει το μικρόφωνο
+                if (isSpeaking) return;
+
                 const speechResult = event.results[event.results.length - 1][0].transcript.trim().toLowerCase();
                 
                 if (speechResult.includes("σταμάτα") || speechResult.includes("στοπ")) {
