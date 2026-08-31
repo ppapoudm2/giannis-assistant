@@ -162,8 +162,8 @@
             navigator.geolocation.getCurrentPosition(async (pos) => {
                 userLocation = { lat: pos.coords.latitude, lon: pos.coords.longitude };
                 try {
-                    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${userLocation.lat}&lon=${userLocation.lon}&accept-language=el`);
-                    const data = await res.json();
+                    const res = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${userLocation.lat}&lon=${userLocation.lon}&accept-language=el`;
+                    const data = await (await fetch(res)).json();
                     detectedCity = data.address.city || data.address.town || data.address.village || "Κόρινθος";
                 } catch (e) {}
                 updateTokenUI(0);
@@ -243,6 +243,9 @@
 
                 const speechResult = event.results[event.results.length - 1][0].transcript.trim().toLowerCase();
                 
+                // ΑΥΣΤΗΡΗ ΑΣΦΑΛΕΙΑ: Αν η αναγνώριση πάρει κενό ή θόρυβο κάτω από 2 γράμματα, αγνόησέ το εντελώς
+                if (!speechResult || speechResult.length < 2) return;
+
                 if (speechResult.includes("σταμάτα") || speechResult.includes("στοπ")) {
                     stopEverything();
                     speak("Εντάξει, σταματάω.");
