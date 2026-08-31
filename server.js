@@ -1,18 +1,22 @@
-const express = require('express');
-const path = require('path');
-const OpenAI = require('openai');
+import express from 'express';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import OpenAI from 'openai';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Αρχικοποίηση του OpenAI με το κλειδί σου από τις περιβαλλοντικές μεταβλητές (Render Environment Variables)
+// Αρχικοποίηση του OpenAI με το κλειδί σου
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY
 });
 
 app.use(express.json());
 
-// Σερβίρει τα αρχεία του frontend (index.html κλπ.)
+// Σερβίρει τα αρχεία του frontend
 app.use(express.static(path.join(__dirname, 'public')));
 
 // API endpoint για τη συνομιλία με δυνατότητα web search
@@ -35,12 +39,10 @@ app.post('/api/chat', async (req, res) => {
 
         const fullMessages = [systemPrompt, ...messages];
 
-        // Κλήση στο OpenAI API. Χρησιμοποιούμε το μοντέλο gpt-4o (ή gpt-4o-mini) 
-        // και ενεργοποιούμε τα ενσωματωμένα εργαλεία αναζήτησης (web_search) όταν απαιτείται.
         const completion = await openai.chat.completions.create({
             model: "gpt-4o",
             messages: fullMessages,
-            tools: [{ type: "web_search" }], // Ενεργοποίηση δυναμικής αναζήτησης στο internet
+            tools: [{ type: "web_search" }],
             temperature: 0.7,
         });
 
