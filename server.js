@@ -39,8 +39,9 @@ app.post('/api/chat', async (req, res) => {
 
     contentsArray.push({ text: prompt && prompt.trim() !== '' ? prompt : "Γεια σου Γιάννη!" });
 
+    // Υποστηριζόμενο μοντέλο για το @google/genai SDK
     const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.5-flash',
       contents: contentsArray,
       config: {
         systemInstruction: {
