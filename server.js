@@ -1,54 +1,63 @@
-import express from 'express';
-import cors from 'cors';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import OpenAI from 'openai';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const express = require('express');
+const path = require('path');
+const OpenAI = require('openai');
 
 const app = express();
-app.use(cors());
-app.use(express.json({ limit: '10mb' }));
-app.use(express.static(__dirname));
+const port = process.env.PORT || 3000;
 
+// Αρχικοποίηση του OpenAI με το κλειδί σου από τις περιβαλλοντικές μεταβλητές (Render Environment Variables)
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
+    apiKey: process.env.OPENAI_API_KEY
 });
 
+app.use(express.json());
+
+// Σερβίρει τα αρχεία του frontend (index.html κλπ.)
+app.use(express.static(path.join(__dirname, 'public')));
+
+// API endpoint για τη συνομιλία με δυνατότητα web search
 app.post('/api/chat', async (req, res) => {
-  try {
-    const { messages, location } = req.body;
+    try {
+        const { messages, location } = req.body;
 
-    const currentTime = new Date().toLocaleString('el-GR', { timeZone: 'Europe/Athens' });
-    let systemContext = `Είσαι ο 'Γιάννης', ένας φιλικός φωνητικός βοηθός. Απάντα σύντομα (1-2 προτάσεις) στα ελληνικά. Τρέχουσα ώρα: ${currentTime}.`;
+        let locationString = "Άγνωστη τοποθεσία";
+        if (location && location.lat && location.lon) {
+            locationString = `Γεωγραφικό πλάτος: ${location.lat}, Μήκος: ${location.lon}`;
+        }
 
-    if (location && location.lat && location.lon) {
-      systemContext += ` Το γεωγραφικό πλάτος/μήκος του χρήστη είναι (${location.lat}, ${location.lon}).`;
+        const systemPrompt = {
+            role: "system",
+            content: `Εσύ είσαι ο Γιάννης, ένας προσωπικός φωνητικός βοηθός. 
+Τρέχουσα τοποθεσία χρήστη: ${locationString}. 
+Τρέχουσα ημερομηνία και ώρα: ${new Date().toLocaleString('el-GR', { timeZone: 'Europe/Athens' })}.
+Να απαντάς σύντομα, άμεσα και φυσικά στα ελληνικά, σαν να μιλάς σε φωνητική συνομιλία.`
+        };
+
+        const fullMessages = [systemPrompt, ...messages];
+
+        // Κλήση στο OpenAI API. Χρησιμοποιούμε το μοντέλο gpt-4o (ή gpt-4o-mini) 
+        // και ενεργοποιούμε τα ενσωματωμένα εργαλεία αναζήτησης (web_search) όταν απαιτείται.
+        const completion = await openai.chat.completions.create({
+            model: "gpt-4o",
+            messages: fullMessages,
+            tools: [{ type: "web_search" }], // Ενεργοποίηση δυναμικής αναζήτησης στο internet
+            temperature: 0.7,
+        });
+
+        const reply = completion.choices[0].message.content;
+        const usage = completion.usage || { total_tokens: 0 };
+
+        res.json({
+            reply: reply,
+            usage: usage
+        });
+
+    } catch (error) {
+        console.error("Σφάλμα στον server:", error);
+        res.status(500).json({ reply: "Συνέβη κάποιο σφάλμα σύνδεσης με τον διακομιστή.", usage: { total_tokens: 0 } });
     }
-
-    let fullMessages = [
-      { role: "system", content: systemContext },
-      ...messages
-    ];
-
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: fullMessages,
-      max_tokens: 150
-    });
-
-    res.json({
-      reply: response.choices[0].message.content,
-      usage: response.usage
-    });
-  } catch (error) {
-    console.error("OpenAI Error:", error);
-    res.status(500).json({ error: 'Σφάλμα επικοινωνίας' });
-  }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+app.listen(port, () => {
+    console.log(`Ο server τρέχει στη θύρα ${port}`);
 });
