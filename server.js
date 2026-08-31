@@ -40,7 +40,7 @@ app.post('/api/chat', async (req, res) => {
     contentsArray.push({ text: prompt && prompt.trim() !== '' ? prompt : "Γεια σου Γιάννη!" });
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
+      model: 'gemini-1.5-flash',
       contents: contentsArray,
       config: {
         systemInstruction: {
@@ -54,7 +54,6 @@ app.post('/api/chat', async (req, res) => {
   } catch (error) {
     console.error("Gemini API Error Detail:", error);
     
-    // Αν ξεπεραστεί το όριο (429) ή είναι φορτωμένο (503), επιστρέφουμε φιλικό μήνυμα στο frontend
     if (error.status === 429) {
       return res.json({ text: "Γιάννη, στέλνεις πολλά αιτήματα μαζί. Περίμενε μισό λεπτό και ξαναπές το!" });
     }
