@@ -1,64 +1,68 @@
 import express from 'express';
 import cors from 'cors';
-import OpenAI from 'openai';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import OpenAI from 'openai';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
-
-// Διόρθωση: Σερβίρει τα αρχεία απευθείας από τη ρίζα (root) όπου βρίσκεται και το index.html
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(__dirname));
 
 const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY
+  apiKey: process.env.OPENAI_API_KEY
 });
 
 app.post('/api/chat', async (req, res) => {
-    try {
-        const { message, image } = req.body;
+  try {
+    const { prompt, location, image } = req.body;
 
-        let messages = [
-            { role: "system", content: "Εσύ είσαι ο Γιάννης, ένας προσωπικός βοηθός φωνής και τεχνητής νοημοσύνης." }
-        ];
+    const currentTime = new Date().toLocaleString('el-GR', { timeZone: 'Europe/Athens' });
+    let systemContext = `Είσαι ο 'Γιάννης', ένας φιλικός φωνητικός βοηθός. Απάντα σύντομα (1-2 προτάσεις) στα ελληνικά. Τρέχουσα ώρα: ${currentTime}.`;
 
-        if (image) {
-            messages.push({
-                role: "user",
-                content: [
-                    { type: "text", text: message || "Τι βλέπεις εδώ;" },
-                    { type: "image_url", image_url: { url: image } }
-                ]
-            });
-        } else {
-            messages.push({ role: "user", content: message });
-        }
-
-        const completion = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: messages,
-        });
-
-        const reply = completion.choices[0].message.content;
-        const usage = completion.usage;
-
-        res.json({
-            reply: reply,
-            usage: usage
-        });
-
-    } catch (error) {
-        console.error("Σφάλμα στο API της OpenAI:", error);
-        res.status(500).json({ error: "Υπήρξε κάποιο σφάλμα στην επεξεργασία." });
+    if (location && location.lat && location.lon) {
+      systemContext += ` Το γεωγραφικό πλάτος/μήκος του χρήστη είναι (${location.lat}, ${location.lon}).`;
     }
+
+    let messages = [
+      { role: "system", content: systemContext }
+    ];
+
+    if (image) {
+      messages.push({
+        role: "user",
+        content: [
+          { type: "text", text: prompt && prompt.trim() !== '' ? prompt : "Τι βλέπεις εδώ;" },
+          { type: "image_url", image_url: { url: image } }
+        ]
+      });
+    } else {
+      messages.push({
+        role: "user",
+        content: prompt && prompt.trim() !== '' ? prompt : "Γεια σου Γιάννη!"
+      });
+    }
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: messages,
+      max_tokens: 150
+    });
+
+    const replyText = response.choices[0].message.content || "Δεν κατάλαβα, μπορείς να το επαναλάβεις;";
+    const usage = response.usage; // Προσθέτουμε ξανά τα tokens χωρίς να χαλάσουμε τίποτα
+
+    res.json({ text: replyText, usage: usage });
+  } catch (error) {
+    console.error("OpenAI API Error Detail:", error);
+    res.status(500).json({ error: 'Πρόβλημα επικοινωνίας με το OpenAI API', details: error.message });
+  }
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`Ο server του Γιάννη τρέχει στην πόρτα ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
