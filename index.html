@@ -233,8 +233,6 @@
             utterance.onend = finishSpeech;
             utterance.onerror = finishSpeech;
 
-            setTimeout(finishSpeech, 8000);
-
             window.speechSynthesis.speak(utterance);
         }
 
@@ -266,7 +264,7 @@
                         isWaitingForCommand = true;
                         pulseDot.classList.add('active');
                         statusText.innerText = 'Ενεργός - Περιμένω την ερώτησή σου...';
-                        speak("Ακούω"); // Λέει μόνο "Ακούω" για να ξέρεις ότι ενεργοποιήθηκε
+                        speak("Ακούω");
                     }
                     return;
                 }
