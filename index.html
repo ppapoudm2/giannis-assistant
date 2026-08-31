@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Γιάννη - Voice Assistant</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col font-sans select-none" onclick="startHandsFree()">
+
+  <header class="p-6 border-b border-gray-800 text-center">
+    <p class="text-xs uppercase tracking-widest text-indigo-400 font-semibold">Voice Assistant</p>
+    <h1 class="text-3xl font-bold mt-1">Γιάννη</h1>
+  </header>
+
+  <main class="flex-1 max-w-2xl w-full mx-auto p-4 flex flex-col justify-between">
+    <div class="text-center my-4">
+      <div id="status-icon" class="w-20 h-20 mx-auto mb-3 rounded-full bg-indigo-600/20 text-indigo-400 flex items-center justify-center text-3xl transition-all duration-300">
+        <i class="fas fa-microphone"></i>
+      </div>
+      <p id="status-text" class="text-gray-400 text-base font-medium">Ακουμπήστε οπουδήποτε στην οθόνη για ενεργοποίηση</p>
+    </div>
+
+    <!-- Live Camera Window -->
+    <div id="camera-container" class="hidden mb-4 relative rounded-2xl overflow-hidden border border-gray-700 bg-black max-h-48 flex justify-center items-center">
+      <video id="webcam" autoplay playsinline class="w-full h-auto object-cover max-h-48"></video>
+      <canvas id="canvas" class="hidden"></canvas>
+      <div class="absolute top-2 left-2 bg-red-600/80 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
+        <span class="w-2 h-2 rounded-full bg-white animate-ping"></span> Live Camera
+      </div>
+    </div>
+
+    <div id="chat-box" class="flex-1 bg-gray-800/50 rounded-2xl p-4 overflow-y-auto max-h-[50vh] space-y-3 border border-gray-700/50 mb-4">
+      <p class="text-xs text-center text-gray-500 default-msg">Πες «Γιάννη» για να ξεκινήσεις τη συνομιλία.</p>
+    </div>
+  </main>
+
+  <script>
+    const WAKE_WORD = "γιάννη";
+    const STOP_WORDS = ["σταμάτα", "σταματα", "τέλος", "τελος", "σώπα", "σωπα", "κλείσε"];
+    const CAMERA_TOGGLE_WORDS = ["κάμερα", "καμερα"];
+    const VISION_WORDS = ["δες", "κοίτα", "κοιτα", "τι βλέπεις", "τι βλεπεις"];
+
+    const chatBox = document.getElementById('chat-box');
+    const statusText = document.getElementById('status-text');
+    const statusIcon = document.getElementById('status-icon');
+    const cameraContainer = document.getElementById('camera-container');
+    const videoElement = document.getElementById('webcam');
+    const canvasElement = document.getElementById('canvas');
+
+    let recognition;
+    let isListening = false;
+    let isSpeaking = false;
+    let isActiveSession = false;
+    let autoStarted = false;
+    let userLocation = null;
+    let cameraStream = null;
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => { userLocation = { lat: pos.coords.latitude, lon: pos.coords.longitude }; },
+        (err) => console.log("Geolocation error:", err)
+      );
+    }
+
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.lang = 'el-GR';
+
+      recognition.onresult = async (event) => {
+        if (isSpeaking) return;
+
+        const lastResultIndex = event.results.length - 1;
+        const transcript = event.results[lastResultIndex][0].transcript.trim().toLowerCase();
+
+        // 1. Έλεγχος τερματισμού
+        if (STOP_WORDS.some(word => transcript.includes(word))) {
+          isActiveSession = false;
+          stopCamera();
+          updateStatusUI("Σε αναμονή... (Πες «Γιάννη»)", false);
+          const exitMsg = "Εντάξει, σταματάω.";
+          addMessage('assistant', exitMsg);
+          speak(exitMsg);
+          return;
+        }
+
+        // 2. Έλεγχος Wake Word
+        if (!isActiveSession) {
+          if (transcript.includes(WAKE_WORD)) {
+            isActiveSession = true;
+            updateStatusUI("Ενεργός - Ακούω...", true);
+            const greeting = "Σε άκουσα! Πώς μπορώ να βοηθήσω;";
+            addMessage('assistant', greeting);
+            speak(greeting);
+          }
+          return;
+        }
+
+        let cleanPrompt = transcript;
+        if (cleanPrompt.startsWith(WAKE_WORD)) {
+          cleanPrompt = cleanPrompt.replace(WAKE_WORD, '').trim();
+        }
+
+        if (!cleanPrompt) {
+          const response = "Σε ακούω, πες μου τι χρειάζεσαι!";
+          addMessage('assistant', response);
+          speak(response);
+          return;
+        }
+
+        addMessage('user', transcript);
+
+        // 3. ON / OFF Κάμερας (Toggle)
+        if (CAMERA_TOGGLE_WORDS.some(word => cleanPrompt === word || cleanPrompt.includes("άνοιξε κάμερα") || cleanPrompt.includes("κλείσε κάμερα"))) {
+          if (cameraStream) {
+            stopCamera();
+            const msg = "Έκλεισα την κάμερα.";
+            addMessage('assistant', msg);
+            speak(msg);
+          } else {
+            await startCamera();
+            const msg = "Άνοιξα την κάμερα.";
+            addMessage('assistant', msg);
+            speak(msg);
+          }
+          return;
+        }
+
+        // 4. Ερώτηση με ανάλυση εικόνας
+        if (VISION_WORDS.some(word => cleanPrompt.includes(word)) || cameraStream) {
+          if (!cameraStream) await startCamera();
+          setTimeout(() => {
+            const imageBase64 = captureImage();
+            askGemini(cleanPrompt, imageBase64);
+          }, 500);
+        } else {
+          askGemini(cleanPrompt, null);
+        }
+      };
+
+      recognition.onend = () => {
+        if (isListening && !isSpeaking) {
+          try { recognition.start(); } catch (e) {}
+        }
+      };
+    }
+
+    async function startHandsFree() {
+      if (autoStarted) return;
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        if (recognition) {
+          recognition.start();
+          isListening = true;
+          autoStarted = true;
+          updateStatusUI("Σε αναμονή... (Πες «Γιάννη»)", false);
+        }
+      } catch (e) {
+        statusText.innerText = "Απαιτείται άδεια μικροφώνου!";
+      }
+    }
+
+    async function startCamera() {
+      try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        videoElement.srcObject = cameraStream;
+        cameraContainer.classList.remove('hidden');
+      } catch (e) {
+        console.error("Camera error:", e);
+      }
+    }
+
+    function stopCamera() {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+        cameraStream = null;
+        videoElement.srcObject = null;
+        cameraContainer.classList.add('hidden');
+      }
+    }
+
+    function captureImage() {
+      if (!videoElement.srcObject) return null;
+      const context = canvasElement.getContext('2d');
+      canvasElement.width = videoElement.videoWidth || 640;
+      canvasElement.height = videoElement.videoHeight || 480;
+      context.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+      return canvasElement.toDataURL('image/jpeg', 0.6);
+    }
+
+    window.addEventListener('load', () => { startHandsFree(); });
+
+    function updateStatusUI(text, active) {
+      statusText.innerText = text;
+      if (active) statusIcon.classList.add('animate-pulse', 'text-red-400');
+      else statusIcon.classList.remove('animate-pulse', 'text-red-400');
+    }
+
+    async function askGemini(promptText, imageBase64) {
+      updateStatusUI("Σκέφτομαι...", true);
+      try {
+        const payload = { prompt: promptText, location: userLocation, image: imageBase64 };
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        const reply = data.text || "Δεν μπορώ να απαντήσω αυτή τη στιγμή.";
+        
+        updateStatusUI("Ενεργός - Ακούω...", true);
+        addMessage('assistant', reply);
+        speak(reply);
+      } catch (err) {
+        updateStatusUI("Σφάλμα σύνδεσης", false);
+        addMessage('assistant', "Σφάλμα επικοινωνίας.");
+      }
+    }
+
+    function speak(text) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'el-GR';
+        utterance.onstart = () => { isSpeaking = true; if (recognition) recognition.stop(); };
+        utterance.onend = () => {
+          isSpeaking = false;
+          if (isListening && recognition) { try { recognition.start(); } catch (e) {} }
+        };
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+
+    function addMessage(sender, content) {
+      const msgDiv = document.createElement('div');
+      msgDiv.className = `p-3 rounded-xl max-w-[80%] ${sender === 'user' ? 'bg-indigo-600/30 ml-auto text-right' : 'bg-gray-700/50 mr-auto text-left'}`;
+      msgDiv.innerText = content;
+      chatBox.appendChild(msgDiv);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+  </script>
+</body>
+</html>
