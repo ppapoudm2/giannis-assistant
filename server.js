@@ -31,21 +31,24 @@ app.post('/api/chat', async (req, res) => {
         if (lastUserMessage.length > 2) {
             try {
                 const encodedQuery = encodeURIComponent(lastUserMessage);
-                const response = await fetch(`https://api.duckduckgo.com/?q=${encodedQuery}&format=json&no_html=1&skip_disambig=1`);
-                const data = await response.json();
+                const response = await fetch(`https://html.duckduckgo.com/html/?q=${encodedQuery}`, {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    }
+                });
+                const html = await response.text();
                 
+                // Εξαγωγή των snippets αποτελεσμάτων με regex
+                const regex = /<a class="result__snippet[^>]*>(.*?)<\/a>/g;
+                let matches;
                 let snippets = [];
-                if (data.AbstractText) {
-                    snippets.push(data.AbstractText);
-                }
-                if (data.RelatedTopics && data.RelatedTopics.length > 0) {
-                    data.RelatedTopics.slice(0, 3).forEach(topic => {
-                        if (topic.Text) snippets.push(topic.Text);
-                    });
+                while ((matches = regex.exec(html)) !== null && snippets.length < 3) {
+                    const cleanText = matches[1].replace(/<\/?[^>]+(>|$)/g, ""); // Αφαίρεση HTML tags
+                    snippets.push(cleanText);
                 }
 
                 if (snippets.length > 0) {
-                    webSearchResults = "Σχετικές πληροφορίες από το internet:\n" + snippets.join("\n");
+                    webSearchResults = "Πρόσφατα αποτελέσματα από το internet:\n- " + snippets.join("\n- ");
                 }
             } catch (searchError) {
                 console.error("Σφάλμα κατά την αναζήτηση web:", searchError);
