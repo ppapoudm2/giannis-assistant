@@ -3,93 +3,186 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Γιάννης - Φωνητικός Βοηθός</title>
+    <title>Γιάννης - Προσωπικός Βοηθός</title>
     <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --accent: #38bdf8;
+            --accent-glow: rgba(56, 189, 248, 0.3);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --user-bubble: #0284c7;
+            --assistant-bubble: #334155;
+        }
+
         body {
-            font-family: Arial, sans-serif;
-            background-color: #121212;
-            color: #ffffff;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
             margin: 0;
-            padding: 20px;
+            padding: 0;
             display: flex;
-            flex-direction: column;
-            align-items: center;
             justify-content: center;
+            align-items: center;
             height: 100vh;
         }
-        #chat-container {
+
+        #app-container {
             width: 100%;
-            max-width: 600px;
-            background: #1e1e1e;
+            max-width: 650px;
+            height: 90vh;
+            background: var(--card-bg);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        header {
             padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+            background: rgba(15, 23, 42, 0.6);
             display: flex;
-            flex-direction: column;
-            gap: 15px;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         }
+
+        header h2 {
+            margin: 0;
+            font-size: 20px;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-info {
+            font-size: 13px;
+            color: var(--text-muted);
+            text-align: right;
+        }
+
         #messages {
-            height: 300px;
+            flex: 1;
             overflow-y: auto;
-            border: 1px solid #333;
-            padding: 10px;
-            border-radius: 8px;
-            background: #181818;
+            padding: 20px;
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 12px;
+            scroll-behavior: smooth;
         }
+
         .message {
-            padding: 8px 12px;
-            border-radius: 6px;
-            max-width: 80%;
-            font-size: 14px;
-        }
-        .user { background: #0056b3; align-self: flex-end; }
-        .assistant { background: #333; align-self: flex-start; }
-        #status {
+            padding: 12px 16px;
+            border-radius: 14px;
+            max-width: 75%;
             font-size: 15px;
-            text-align: center;
-            padding: 8px;
-            background: #2a2a2a;
-            border-radius: 6px;
-            color: #00ffcc;
+            line-height: 1.4;
+            animation: fadeIn 0.3s ease;
         }
-        .counter {
-            position: fixed;
-            top: 10px;
-            right: 10px;
-            background: rgba(0,0,0,0.8);
-            color: #00ffcc;
-            padding: 8px 12px;
-            border-radius: 6px;
-            border: 1px solid #00ffcc;
-            font-size: 12px;
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .user { 
+            background: var(--user-bubble); 
+            color: #fff; 
+            align-self: flex-end; 
+            border-bottom-right-radius: 4px; 
+        }
+        
+        .assistant { 
+            background: var(--assistant-bubble); 
+            color: var(--text-main); 
+            align-self: flex-start; 
+            border-bottom-left-radius: 4px; 
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        #status-bar {
+            padding: 15px 20px;
+            background: rgba(15, 23, 42, 0.4);
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .pulse-dot {
+            width: 12px;
+            height: 12px;
+            background-color: #ef4444;
+            border-radius: 50%;
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+            animation: pulse 1.5s infinite;
+        }
+
+        .pulse-dot.active {
+            background-color: #22c55e;
+            box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(34, 197, 94, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+        }
+
+        #status-text {
+            font-size: 14px;
+            color: var(--text-muted);
+            font-weight: 500;
         }
     </style>
 </head>
 <body>
 
-    <div class="counter" id="counterDisplay">Tokens: 0 | Πόλη: Εντοπισμός...</div>
+    <div id="app-container">
+        <header>
+            <h2>✨ Γιάννης AI</h2>
+            <div class="header-info" id="headerInfo">
+                <div>Πόλη: Εντοπισμός...</div>
+                <div>Tokens: <span id="totalTokens">0</span> (Τρέχοντα: <span id="currentTokens">0</span>)</div>
+            </div>
+        </header>
 
-    <div id="chat-container">
-        <h2>🎙️ Γιάννης AI</h2>
         <div id="messages"></div>
-        <div id="status">Περιμένω τη λέξη «Γιάννη»...</div>
+
+        <div id="status-bar">
+            <div class="pulse-dot" id="pulseDot"></div>
+            <div id="status-text">Περιμένω τη λέξη «Γιάννη»...</div>
+        </div>
     </div>
 
     <script>
         const messagesDiv = document.getElementById("messages");
-        const statusDiv = document.getElementById("status");
-        const counterDisplay = document.getElementById("counterDisplay");
+        const statusText = document.getElementById("status-text");
+        const pulseDot = document.getElementById("pulseDot");
+        const totalTokensEl = document.getElementById("totalTokens");
+        const currentTokensEl = document.getElementById("currentTokens");
+        const headerInfo = document.getElementById("headerInfo");
 
-        let totalTokens = 0;
+        let totalSessionTokens = 0;
         let userLocation = null;
         let detectedCity = "Κόρινθος";
         let isListeningActive = false;
         let isAssistantSpeaking = false;
         let conversationHistory = [];
         let recognition = null;
+        let selectedVoice = null;
+
+        // Φόρτωση πιο φυσικής φωνής στα ελληνικά αν υπάρχει
+        function loadVoices() {
+            const voices = window.speechSynthesis.getVoices();
+            selectedVoice = voices.find(v => v.lang.includes('el') && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Melina'))) || voices.find(v => v.lang.includes('el')) || voices[0];
+        }
+        window.speechSynthesis.onvoiceschanged = loadVoices;
+        loadVoices();
 
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(async (pos) => {
@@ -99,12 +192,14 @@
                     const data = await res.json();
                     detectedCity = data.address.city || data.address.town || data.address.village || "Κόρινθος";
                 } catch (e) {}
-                updateCounter();
-            }, () => { updateCounter(); });
+                updateHeaderInfo();
+            }, () => { updateHeaderInfo(); });
         }
 
-        function updateCounter() {
-            counterDisplay.innerText = `Tokens: ${totalTokens} | Πόλη: ${detectedCity}`;
+        function updateHeaderInfo(latest = 0) {
+            totalTokensEl.innerText = totalSessionTokens;
+            currentTokensEl.innerText = latest;
+            headerInfo.children[0].innerText = `Πόλη: ${detectedCity}`;
         }
 
         function appendMessage(role, text) {
@@ -116,25 +211,34 @@
         function speak(text, callback) {
             window.speechSynthesis.cancel();
             isAssistantSpeaking = true;
+            pulseDot.classList.remove('active');
+            statusText.innerText = "Ο Γιάννης μιλάει...";
 
-            // Κλείνουμε τελείως το μικρόφωνο ώστε να μην ακούει τίποτα ενώ μιλάει ο Γιάννης
             if (recognition) {
                 try { recognition.stop(); } catch (e) {}
             }
 
             const utterance = new SpeechSynthesisUtterance(text);
+            if (selectedVoice) utterance.voice = selectedVoice;
             utterance.lang = 'el-GR';
-            utterance.rate = 1.0;
+            utterance.rate = 1.02; // Ελαφρώς πιο φυσικός ρυθμός
+            utterance.pitch = 1.0;
             
             utterance.onend = () => {
-                // Περιμένουμε 1 ολόκληρο δευτερόλεπτο αφού τελειώσει η ομιλία πριν ξανανάψουμε το μικρόφωνο
                 setTimeout(() => {
                     isAssistantSpeaking = false;
                     if (recognition) {
                         try { recognition.start(); } catch (e) {}
                     }
+                    if (isListeningActive) {
+                        pulseDot.classList.add('active');
+                        statusText.innerText = "Ενεργός - Ακούω την ερώτησή σου...";
+                    } else {
+                        pulseDot.classList.remove('active');
+                        statusText.innerText = "Περιμένω τη λέξη «Γιάννη»...";
+                    }
                     if (callback) callback();
-                }, 1000);
+                }, 800);
             };
 
             window.speechSynthesis.speak(utterance);
@@ -156,7 +260,8 @@
                 
                 if (speechResult.includes("σταμάτα") || speechResult.includes("στοπ")) {
                     isListeningActive = false;
-                    statusDiv.innerText = 'Περιμένω τη λέξη «Γιάννη»...';
+                    pulseDot.classList.remove('active');
+                    statusText.innerText = 'Περιμένω τη λέξη «Γιάννη»...';
                     speak("Εντάξει, σταματάω.");
                     return;
                 }
@@ -164,13 +269,15 @@
                 if (!isListeningActive) {
                     if (speechResult.includes("γιάννη") || speechResult.includes("γιάννης")) {
                         isListeningActive = true;
-                        statusDiv.innerText = 'Ενεργός - Ακούω...';
+                        pulseDot.classList.add('active');
+                        statusText.innerText = 'Ενεργός - Ακούω...';
                         speak("Ναι, εδώ είμαι. Τι θες;");
                     }
                 } else {
                     appendMessage('user', speechResult);
                     conversationHistory.push({ role: "user", content: speechResult });
-                    statusDiv.innerText = "Σκέφτομαι...";
+                    statusText.innerText = "Σκέφτομαι...";
+                    pulseDot.classList.remove('active');
 
                     try {
                         const res = await fetch('/api/chat', {
@@ -180,18 +287,19 @@
                         });
                         const data = await res.json();
 
+                        let promptTokens = 0;
                         if (data.usage && data.usage.total_tokens) {
-                            totalTokens += data.usage.total_tokens;
-                            updateCounter();
+                            promptTokens = data.usage.total_tokens;
+                            totalSessionTokens += promptTokens;
+                            updateHeaderInfo(promptTokens);
                         }
 
                         appendMessage('assistant', data.reply);
                         conversationHistory.push({ role: "assistant", content: data.reply });
 
-                        statusDiv.innerText = "Ακούω...";
                         speak(data.reply);
                     } catch (err) {
-                        statusDiv.innerText = "Σφάλμα σύνδεσης.";
+                        statusText.innerText = "Σφάλμα σύνδεσης.";
                     }
                 }
             };
@@ -204,7 +312,7 @@
 
             try {
                 recognition.start();
-                statusDiv.innerText = "Περιμένω τη λέξη «Γιάννη»...";
+                statusText.innerText = "Περιμένω τη λέξη «Γιάννη»...";
             } catch (e) {}
         }
     </script>
