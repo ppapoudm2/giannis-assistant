@@ -12,11 +12,12 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+// Διόρθωση: Σερβίρει τα αρχεία απευθείας από τη ρίζα (root) όπου βρίσκεται και το index.html
+app.use(express.static(__dirname));
+
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY
 });
-
-app.use(express.static(path.join(__dirname, 'public')));
 
 app.post('/api/chat', async (req, res) => {
     try {
