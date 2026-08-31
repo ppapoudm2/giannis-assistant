@@ -2,10 +2,9 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import OpenAI from 'openai';
-import { search } from 'duckduckgo-search';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __filename = fileURLTPath(import.meta.url) || import.meta.url;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -26,22 +25,27 @@ app.post('/api/chat', async (req, res) => {
             locationString = `Γεωγραφικό πλάτος: ${location.lat}, Μήκος: ${location.lon}`;
         }
 
-        // Παίρνουμε το τελευταίο μήνυμα του χρήστη για να δούμε αν ζητάει αναζήτηση
         const lastUserMessage = messages[messages.length - 1]?.content || "";
         
         let webSearchResults = "";
-        // Αν ο χρήστης ζητήσει κάτι που μοιάζει με αναζήτηση ή ερώτηση επικαιρότητας
         if (lastUserMessage.length > 2) {
             try {
-                const searchResults = await search(lastUserMessage, {
-                    safesearch: 'moderate',
-                    locale: 'el-GR',
-                    limit: 3
-                });
+                const encodedQuery = encodeURIComponent(lastUserMessage);
+                const response = await fetch(`https://api.duckduckgo.com/?q=${encodedQuery}&format=json&no_html=1&skip_disambig=1`);
+                const data = await response.json();
                 
-                if (searchResults && searchResults.length > 0) {
-                    webSearchResults = "Αποτελέσματα αναζήτησης στο internet:\n" + 
-                        searchResults.map(r => `- ${r.title}: ${r.snippet} (${r.link})`).join("\n");
+                let snippets = [];
+                if (data.AbstractText) {
+                    snippets.push(data.AbstractText);
+                }
+                if (data.RelatedTopics && data.RelatedTopics.length > 0) {
+                    data.RelatedTopics.slice(0, 3).forEach(topic => {
+                        if (topic.Text) snippets.push(topic.Text);
+                    });
+                }
+
+                if (snippets.length > 0) {
+                    webSearchResults = "Σχετικές πληροφορίες από το internet:\n" + snippets.join("\n");
                 }
             } catch (searchError) {
                 console.error("Σφάλμα κατά την αναζήτηση web:", searchError);
@@ -54,7 +58,7 @@ app.post('/api/chat', async (req, res) => {
 Τρέχουσα τοποθεσία χρήστη: ${locationString}. 
 Τρέχουσα ημερομηνία και ώρα: ${new Date().toLocaleString('el-GR', { timeZone: 'Europe/Athens' })}.
 ${webSearchResults}
-Να απαντάς σύντομα, άμεσα και φυσικά στα ελληνικά, σαν να μιλάς σε φωνητική συνομιλία. Αν υπάρχουν αποτελέσματα αναζήτησης, χρησιμοποίησέ τα για να ενημερώσεις τον χρήστη.`
+Να απαντάς σύντομα, άμεσα και φυσικά στα ελληνικά, σαν να μιλάς σε φωνητική συνομιλία. Αν υπάρχουν πληροφορίες από το internet παραπάνω, χρησιμοποίησέ τις για να απαντήσεις σωστά.`
         };
 
         const fullMessages = [systemPrompt, ...messages];
