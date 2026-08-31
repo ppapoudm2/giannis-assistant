@@ -53,6 +53,7 @@
     let isListening = false;
     let isSpeaking = false;
     let isActiveSession = false;
+    let isRequestPending = false;
     let autoStarted = false;
     let userLocation = null;
     let cameraStream = null;
@@ -72,7 +73,7 @@
       recognition.lang = 'el-GR';
 
       recognition.onresult = async (event) => {
-        if (isSpeaking) return;
+        if (isSpeaking || isRequestPending) return;
 
         const lastResultIndex = event.results.length - 1;
         const transcript = event.results[lastResultIndex][0].transcript.trim().toLowerCase();
@@ -97,7 +98,7 @@
             addMessage('assistant', greeting);
             speak(greeting);
           }
-          return;
+          return; // Διορθώθηκε: Σταματάει εδώ για να μην στείλει κενό αίτημα στο API
         }
 
         let cleanPrompt = transcript;
@@ -105,12 +106,7 @@
           cleanPrompt = cleanPrompt.replace(WAKE_WORD, '').trim();
         }
 
-        if (!cleanPrompt) {
-          const response = "Σε ακούω, πες μου τι χρειάζεσαι!";
-          addMessage('assistant', response);
-          speak(response);
-          return;
-        }
+        if (!cleanPrompt) return; // Διορθώθηκε: Αν δεν υπάρχει εντολή μετά το "Γιάννη", περιμένει
 
         addMessage('user', transcript);
 
@@ -130,8 +126,8 @@
           return;
         }
 
-        // 4. Ερώτηση με ανάλυση εικόνας
-        if (VISION_WORDS.some(word => cleanPrompt.includes(word)) || cameraStream) {
+        // 4. Ερώτηση με ανάλυση εικόνας μόνο όταν ζητηθεί ρητά
+        if (VISION_WORDS.some(word => cleanPrompt.includes(word))) {
           if (!cameraStream) await startCamera();
           setTimeout(() => {
             const imageBase64 = captureImage();
@@ -143,7 +139,7 @@
       };
 
       recognition.onend = () => {
-        if (isListening && !isSpeaking) {
+        if (isListening && !isSpeaking && !isRequestPending) {
           try { recognition.start(); } catch (e) {}
         }
       };
@@ -201,6 +197,7 @@
     }
 
     async function askGemini(promptText, imageBase64) {
+      isRequestPending = true;
       updateStatusUI("Σκέφτομαι...", true);
       try {
         const payload = { prompt: promptText, location: userLocation, image: imageBase64 };
@@ -218,6 +215,8 @@
       } catch (err) {
         updateStatusUI("Σφάλμα σύνδεσης", false);
         addMessage('assistant', "Σφάλμα επικοινωνίας.");
+      } finally {
+        isRequestPending = false;
       }
     }
 
@@ -229,7 +228,7 @@
         utterance.onstart = () => { isSpeaking = true; if (recognition) recognition.stop(); };
         utterance.onend = () => {
           isSpeaking = false;
-          if (isListening && recognition) { try { recognition.start(); } catch (e) {} }
+          if (isListening && recognition && !isRequestPending) { try { recognition.start(); } catch (e) {} }
         };
         window.speechSynthesis.speak(utterance);
       }
