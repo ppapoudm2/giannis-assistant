@@ -1,10 +1,9 @@
-<!-- public/index.html - Πλήρης κώδικας frontend με Live Token Counter και Εντοπισμό Πόλης -->
 <!DOCTYPE html>
 <html lang="el">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Γιάννης - Assistant</title>
+    <title>Γιάννης - Φωνητικός Βοηθός</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -18,160 +17,168 @@
             justify-content: center;
             height: 100vh;
         }
-        #chat-container {
+        #container {
             width: 100%;
-            max-width: 600px;
+            max-width: 500px;
             background: #1e1e1e;
             padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+            text-align: center;
         }
-        #messages {
-            height: 350px;
-            overflow-y: auto;
-            border: 1px solid #333;
+        #status {
+            font-size: 18px;
+            margin: 20px 0;
             padding: 10px;
-            border-radius: 5px;
-            background: #181818;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
+            background: #2a2a2a;
+            border-radius: 8px;
+            border: 1px solid #444;
         }
-        .message {
+        #info {
+            font-size: 14px;
+            color: #00ffcc;
+            margin-top: 10px;
+        }
+        .counter {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.8);
+            color: #00ffcc;
             padding: 8px 12px;
             border-radius: 6px;
-            max-width: 80%;
+            border: 1px solid #00ffcc;
+            font-size: 12px;
         }
-        .user { background: #0056b3; align-self: flex-end; }
-        .assistant { background: #333; align-self: flex-start; }
-        .input-area {
-            display: flex;
-            gap: 10px;
-        }
-        input[type="text"] {
-            flex: 1;
-            padding: 10px;
-            border-radius: 5px;
-            border: 1px solid #444;
-            background: #2a2a2a;
-            color: #fff;
-        }
-        button {
-            padding: 10px 20px;
-            border: none;
-            background: #00ffcc;
-            color: #000;
-            font-weight: bold;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        button:hover { background: #00b38f; }
     </style>
 </head>
 <body>
 
-    <div id="chat-container">
-        <h2>Γιάννης AI</h2>
-        <div id="messages"></div>
-        <div class="input-area">
-            <input type="text" id="userInput" placeholder="Πληκτρολόγησε μήνυμα...">
-            <button onclick="sendMessage()">Αποστολή</button>
-        </div>
+    <div class="counter" id="counterDisplay">Tokens: 0 | Πόλη: Εντοπισμός...</div>
+
+    <div id="container">
+        <h2>🎙️ Γιάννης AI</h2>
+        <div id="status">Περιμένω τη λέξη «Γιάννη»...</div>
+        <div id="info">Πες «Γιάννη» για να ξεκινήσεις, ή «σταμάτα» για παύση.</div>
     </div>
 
     <script>
-        // --- Live Token Counter & City Detection UI ---
-        const tokenDisplay = document.createElement("div");
-        tokenDisplay.id = "token-counter";
-        tokenDisplay.style.position = "fixed";
-        tokenDisplay.style.top = "10px";
-        tokenDisplay.style.right = "10px";
-        tokenDisplay.style.background = "rgba(0, 0, 0, 0.8)";
-        tokenDisplay.style.color = "#00ffcc";
-        tokenDisplay.style.padding = "8px 14px";
-        tokenDisplay.style.borderRadius = "8px";
-        tokenDisplay.style.fontSize = "12px";
-        tokenDisplay.style.zIndex = "9999";
-        tokenDisplay.style.border = "1px solid #00ffcc";
-        tokenDisplay.innerHTML = "Tokens: 0 | Πόλη: Εντοπισμός...";
-        document.body.appendChild(tokenDisplay);
+        const statusDiv = document.getElementById("status");
+        const counterDisplay = document.getElementById("counterDisplay");
 
-        let totalSessionTokens = 0;
-        window.currentDetectedCity = "Κόρινθος"; // Default fallback
+        let totalTokens = 0;
+        let userLocation = null;
+        let detectedCity = "Κόρινθος";
+        let isListeningActive = false;
 
-        function updateTokenUI(usage, city) {
-            if (usage && usage.total_tokens) {
-                totalSessionTokens += usage.total_tokens;
-            }
-            const activeCity = city || window.currentDetectedCity;
-            tokenDisplay.innerHTML = `Tokens: ${totalSessionTokens} (Τελευταίο: ${usage ? usage.total_tokens : 0}) | Πόλη: ${activeCity}`;
-        }
-
-        // Αυτόματος εντοπισμός πόλης μέσω Geolocation
+        // 1. Αυτόματος εντοπισμός τοποθεσίας (Στίγμα) με το άνοιγμα
         if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(async (position) => {
-                const lat = position.coords.latitude;
-                const lon = position.coords.longitude;
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                userLocation = { lat: pos.coords.latitude, lon: pos.coords.longitude };
                 try {
-                    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&accept-language=el`);
+                    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${userLocation.lat}&lon=${userLocation.lon}&accept-language=el`);
                     const data = await res.json();
-                    const city = data.address.city || data.address.town || data.address.village || data.address.county || "Κόρινθος";
-                    window.currentDetectedCity = city;
-                    updateTokenUI(null, city);
-                } catch (e) {
-                    updateTokenUI(null, "Κόρινθος");
-                }
+                    detectedCity = data.address.city || data.address.town || data.address.village || "Κόρινθος";
+                } catch (e) {}
+                updateUI("Περιμένω τη λέξη «Γιάννη»...");
             }, () => {
-                updateTokenUI(null, "Κόρινθος");
+                updateUI("Περιμένω τη λέξη «Γιάννη»...");
             });
+        }
+
+        function updateUI(text) {
+            statusDiv.innerText = text;
+            counterDisplay.innerText = `Tokens: ${totalTokens} | Πόλη: ${detectedCity}`;
+        }
+
+        // 2. Συνθεση Φωνής (Text-to-Speech)
+        function speak(text, callback) {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'el-GR';
+            utterance.rate = 1.0;
+            utterance.onend = () => {
+                if (callback) callback();
+            };
+            window.speechSynthesis.speak(utterance);
+        }
+
+        // 3. Αναγνώριση Ομιλίας (Speech Recognition)
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            alert("Ο browser σου δεν υποστηρίζει φωνητική αναγνώριση. Δοκίμασε σε Google Chrome.");
         } else {
-            updateTokenUI(null, "Κόρινθος");
-        }
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'el-GR';
+            recognition.continuous = true;
+            recognition.interimResults = false;
 
-        // --- Λειτουργία αποστολής μηνύματος ---
-        async function sendMessage() {
-            const inputField = document.getElementById("userInput");
-            const messageText = inputField.value.trim();
-            if (!messageText) return;
+            recognition.onresult = async (event) => {
+                const speechResult = event.results[event.results.length - 1][0].transcript.trim().toLowerCase();
+                console.log("Άκουσα:", speechResult);
 
-            const messagesDiv = document.getElementById("messages");
-            messagesDiv.innerHTML += `<div class="message user">${messageText}</div>`;
-            inputField.value = "";
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                // Έλεγχος για εντολή "σταμάτα"
+                if (speechResult.includes("σταμάτα") || speechResult.includes("στοπ")) {
+                    isListeningActive = false;
+                    speak("Εντάξει, σταματάω.", () => {
+                        updateUI("Περιμένω τη λέξη «Γιάννη»...");
+                    });
+                    return;
+                }
 
+                // Αν δεν είμαστε σε ενεργή συνομιλία, ψάχνουμε το Hot Word ("γιάννη" ή "γιάννης")
+                if (!isListeningActive) {
+                    if (speechResult.includes("γιάννη") || speechResult.includes("γιάννης")) {
+                        isListeningActive = true;
+                        speak("Ναι, εδώ είμαι. Τι θες;", () => {
+                            updateUI("Ακούω την ερώτησή σου...");
+                        });
+                    }
+                } else {
+                    // Ενεργή συνομιλία: Στέλνουμε την ερώτηση στον server
+                    updateUI("Σκέφτομαι...");
+                    try {
+                        const res = await fetch('/api/chat', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ message: speechResult, location: userLocation })
+                        });
+                        const data = await res.json();
+
+                        if (data.usage && data.usage.total_tokens) {
+                            totalTokens += data.usage.total_tokens;
+                        }
+
+                        updateUI(`Εσείς: "${speechResult}"\nΓιάννης: "${data.reply}"`);
+                        speak(data.reply, () => {
+                            if (isListeningActive) updateUI("Συνεχίζω να ακούω...");
+                        });
+                    } catch (err) {
+                        speak("Υπήρξε κάποιο σφάλμα σύνδεσης.");
+                        updateUI("Σφάλμα σύνδεσης.");
+                    }
+                }
+            };
+
+            recognition.onerror = (event) => {
+                console.log("Σφάλμα μικροφώνου:", event.error);
+            };
+
+            recognition.onend = () => {
+                // Αυτόματη επανεκκίνηση του recognition για να μην κλείνει ποτέ το μικρόφωνο
+                try {
+                    recognition.start();
+                } catch (e) {}
+            };
+
+            // Ξεκινάει αυτόματα με το που ανοίγει η σελίδα
             try {
-                const response = await fetch('/api/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: messageText })
-                });
-
-                const data = await response.json();
-                
-                if (data.reply) {
-                    messagesDiv.innerHTML += `<div class="message assistant">${data.reply}</div>`;
-                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-                }
-
-                // Ενημέρωση των tokens live στην οθόνη
-                if (data.usage) {
-                    updateTokenUI(data.usage, window.currentDetectedCity);
-                }
-
-            } catch (error) {
-                messagesDiv.innerHTML += `<div class="message assistant" style="color:red;">Σφάλμα σύνδεσης.</div>`;
+                recognition.start();
+                updateUI("Ζητήθηκε μικρόφωνο. Περιμένω «Γιάννη»...");
+            } catch (e) {
+                console.log(e);
             }
         }
-
-        // Υποστήριξη Enter στο input
-        document.getElementById("userInput").addEventListener("keypress", function(event) {
-            if (event.key === "Enter") {
-                sendMessage();
-            }
-        });
     </script>
 </body>
 </html>
