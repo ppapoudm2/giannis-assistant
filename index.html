@@ -118,7 +118,7 @@
             <h2>✨ Γιάννης AI</h2>
             <div class="header-info" id="headerInfo">
                 <div>Πόλη: Εντοπισμός...</div>
-                <div>Tokens: <span id="remainingTokens">10000</span> | Τραβήχτηκαν: <span id="currentTokens">0</span></div>
+                <div>Υπόλοιπο: <span id="remainingTokens">10000</span> | Τραβήχτηκαν: <span id="currentTokens">0</span></div>
             </div>
         </header>
 
@@ -138,8 +138,11 @@
         const currentTokensEl = document.getElementById("currentTokens");
         const headerInfo = document.getElementById("headerInfo");
 
-        const MAX_TOKEN_LIMIT = 10000; // Υποθετικό συνολικό όριο credits/tokens
-        let totalUsedTokens = 0;
+        const INITIAL_LIMIT = 10000;
+        // Φόρτωση αποθηκευμένων tokens από το τοπικό ιστορικό του browser
+        let savedTokens = localStorage.getItem('giannis_total_used');
+        let totalUsedTokens = savedTokens ? parseInt(savedTokens) : 0;
+
         let userLocation = null;
         let detectedCity = "Κόρινθος";
         let isListeningActive = false;
@@ -168,11 +171,12 @@
         }
 
         function updateTokenUI(latestUsage = 0) {
-            const remaining = MAX_TOKEN_LIMIT - totalUsedTokens;
+            const remaining = INITIAL_LIMIT - totalUsedTokens;
             remainingTokensEl.innerText = remaining >= 0 ? remaining : 0;
             currentTokensEl.innerText = latestUsage;
             headerInfo.children[0].innerText = `Πόλη: ${detectedCity}`;
         }
+        updateTokenUI(0);
 
         function appendMessage(role, text) {
             const className = role === 'user' ? 'user' : 'assistant';
@@ -201,9 +205,10 @@
             const utterance = new SpeechSynthesisUtterance(text);
             if (selectedVoice) utterance.voice = selectedVoice;
             utterance.lang = 'el-GR';
-            utterance.rate = 1.0;
+            utterance.rate = 1.05; // Ελαφρώς πιο γρήγορη και φυσική ομιλία
             
             utterance.onend = () => {
+                // Ελαχιστοποίηση καθυστέρησης για μέγιστη ταχύτητα
                 setTimeout(() => {
                     isAssistantSpeaking = false;
                     if (recognition) {
@@ -217,7 +222,7 @@
                         statusText.innerText = "Περιμένω τη λέξη «Γιάννη»...";
                     }
                     if (callback) callback();
-                }, 600);
+                }, 300);
             };
 
             window.speechSynthesis.speak(utterance);
@@ -237,7 +242,6 @@
 
                 const speechResult = event.results[event.results.length - 1][0].transcript.trim().toLowerCase();
                 
-                // Άμεσος τερματισμός με τη λέξη σταμάτα ή στοπ
                 if (speechResult.includes("σταμάτα") || speechResult.includes("στοπ")) {
                     stopEverything();
                     speak("Εντάξει, σταματάω.");
@@ -245,15 +249,13 @@
                 }
 
                 if (!isListeningActive) {
-                    // Ενεργοποίηση μόνο με τη λέξη Γιάννη
+                    // Ενεργοποίηση αθόρυβα με τη λέξη Γιάννη (χωρίς να μιλήσει καθόλου ο βοηθός)
                     if (speechResult.includes("γιάννη") || speechResult.includes("γιάννης")) {
                         isListeningActive = true;
                         pulseDot.classList.add('active');
                         statusText.innerText = 'Ενεργός - Περιμένω την ερώτησή σου...';
-                        speak("Ναι, εδώ είμαι. Τι θες;");
                     }
                 } else {
-                    // Έχει ενεργοποιηθεί, περιμένει ερώτηση και δεν μιλάει αυτόματα
                     appendMessage('user', speechResult);
                     conversationHistory.push({ role: "user", content: speechResult });
                     statusText.innerText = "Σκέφτομαι...";
@@ -271,6 +273,7 @@
                         if (data.usage && data.usage.total_tokens) {
                             promptTokens = data.usage.total_tokens;
                             totalUsedTokens += promptTokens;
+                            localStorage.setItem('giannis_total_used', totalUsedTokens);
                             updateTokenUI(promptTokens);
                         }
 
