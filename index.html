@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Γιάννη - Voice Assistant</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col font-sans select-none" onclick="startHandsFree()">
+
+  <header class="p-6 border-b border-gray-800 text-center">
+    <p class="text-xs uppercase tracking-widest text-indigo-400 font-semibold">Voice Assistant</p>
+    <h1 class="text-3xl font-bold mt-1">Γιάννη</h1>
+  </header>
+
+  <main class="flex-1 max-w-2xl w-full mx-auto p-4 flex flex-col justify-between">
+    <div class="text-center my-6">
+      <div id="status-icon" class="w-20 h-20 mx-auto mb-3 rounded-full bg-indigo-600/20 text-indigo-400 flex items-center justify-center text-3xl transition-all duration-300">
+        <i class="fas fa-microphone"></i>
+      </div>
+      <p id="status-text" class="text-gray-400 text-base font-medium">Ακουμπήστε οπουδήποτε στην οθόνη για ενεργοποίηση</p>
+    </div>
+
+    <div id="chat-box" class="flex-1 bg-gray-800/50 rounded-2xl p-4 overflow-y-auto max-h-[60vh] space-y-3 border border-gray-700/50 mb-4">
+      <p class="text-xs text-center text-gray-500 default-msg">Πες «Γιάννη» για να ξεκινήσεις τη συνομιλία.</p>
+    </div>
+  </main>
+
+  <script>
+    const WAKE_WORD = "γιάννη";
+    const STOP_WORDS = ["σταμάτα", "σταματα", "τέλος", "τελος", "σώπα", "σωπα", "κλείσε"];
+
+    const chatBox = document.getElementById('chat-box');
+    const statusText = document.getElementById('status-text');
+    const statusIcon = document.getElementById('status-icon');
+
+    let recognition;
+    let isListening = false;
+    let isSpeaking = false;
+    let isActiveSession = false;
+    let autoStarted = false;
+
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.lang = 'el-GR';
+
+      recognition.onresult = (event) => {
+        if (isSpeaking) return;
+
+        const lastResultIndex = event.results.length - 1;
+        const transcript = event.results[lastResultIndex][0].transcript.trim().toLowerCase();
+
+        if (STOP_WORDS.some(word => transcript.includes(word))) {
+          isActiveSession = false;
+          updateStatusUI("Σε αναμονή... (Πες «Γιάννη»)", false);
+          const exitMsg = "Εντάξει, σταματάω.";
+          addMessage('assistant', exitMsg);
+          speak(exitMsg);
+          return;
+        }
+
+        if (!isActiveSession) {
+          if (transcript.includes(WAKE_WORD)) {
+            isActiveSession = true;
+            updateStatusUI("Ενεργός - Ακούω...", true);
+            addMessage('user', transcript);
+            const response = "Σε άκουσα! Πώς μπορώ να βοηθήσω;";
+            addMessage('assistant', response);
+            speak(response);
+          }
+          return;
+        }
+
+        addMessage('user', transcript);
+        askGemini(transcript);
+      };
+
+      recognition.onend = () => {
+        if (isListening && !isSpeaking) {
+          try { recognition.start(); } catch (e) {}
+        }
+      };
+    }
+
+    async function startHandsFree() {
+      if (autoStarted) return;
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        if (recognition) {
+          recognition.start();
+          isListening = true;
+          autoStarted = true;
+          updateStatusUI("Σε αναμονή... (Πες «Γιάννη»)", false);
+        }
+      } catch (e) {
+        statusText.innerText = "Απαιτείται άδεια μικροφώνου!";
+      }
+    }
+
+    // Αυτόματη προσπάθεια εκκίνησης με το φόρτωμα
+    window.addEventListener('load', () => {
+      startHandsFree();
+    });
+
+    function updateStatusUI(text, active) {
+      statusText.innerText = text;
+      if (active) statusIcon.classList.add('animate-pulse', 'text-red-400');
+      else statusIcon.classList.remove('animate-pulse', 'text-red-400');
+    }
+
+    async function askGemini(promptText) {
+      updateStatusUI("Σκέφτομαι...", true);
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: promptText })
+        });
+        const data = await res.json();
+        const reply = data.text || "Δεν μπορώ να απαντήσω αυτή τη στιγμή.";
+        
+        updateStatusUI("Ενεργός - Ακούω...", true);
+        addMessage('assistant', reply);
+        speak(reply);
+      } catch (err) {
+        updateStatusUI("Σφάλμα σύνδεσης", false);
+        addMessage('assistant', "Σφάλμα επικοινωνίας με τον διακομιστή.");
+      }
+    }
+
+    function speak(text) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'el-GR';
+
+        utterance.onstart = () => {
+          isSpeaking = true;
+          if (recognition) recognition.stop();
+        };
+
+        utterance.onend = () => {
+          isSpeaking = false;
+          if (isListening && recognition) {
+            try { recognition.start(); } catch (e) {}
+          }
+        };
+
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+
+    function addMessage(sender, content) {
+      const msgDiv = document.createElement('div');
+      msgDiv.className = `p-3 rounded-xl max-w-[80%] ${sender === 'user' ? 'bg-indigo-600/30 ml-auto text-right' : 'bg-gray-700/50 mr-auto text-left'}`;
+      msgDiv.innerText = content;
+      chatBox.appendChild(msgDiv);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+  </script>
+</body>
+</html>
