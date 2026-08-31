@@ -193,7 +193,6 @@
         }
 
         function speak(text, callback) {
-            // Διασφάλιση καθαρισμού τυχόν κολλημένου utterance
             window.speechSynthesis.cancel();
             isAssistantSpeaking = true;
             pulseDot.classList.remove('active');
@@ -234,7 +233,6 @@
             utterance.onend = finishSpeech;
             utterance.onerror = finishSpeech;
 
-            // Ασφαλιστική δικλείδα: Αν ο browser κολλήσει για πάνω από 8 δευτερόλεπτα, ξεκλείδωσε αυτόματα
             setTimeout(finishSpeech, 8000);
 
             window.speechSynthesis.speak(utterance);
@@ -268,12 +266,13 @@
                         isWaitingForCommand = true;
                         pulseDot.classList.add('active');
                         statusText.innerText = 'Ενεργός - Περιμένω την ερώτησή σου...';
+                        speak("Ακούω"); // Λέει μόνο "Ακούω" για να ξέρεις ότι ενεργοποιήθηκε
                     }
                     return;
                 }
 
                 if (isListeningActive && isWaitingForCommand) {
-                    if (speechResult === "γιάννη" || speechResult === "γιάννης") {
+                    if (speechResult === "γιάννη" || speechResult === "γιάννης" || speechResult === "ακούω") {
                         return; 
                     }
 
