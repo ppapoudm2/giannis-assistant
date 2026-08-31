@@ -9,17 +9,13 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Αρχικοποίηση του OpenAI με το κλειδί σου
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY
 });
 
 app.use(express.json());
+app.use(express.static(__dirname));
 
-// Σερβίρει τα αρχεία του frontend
-app.use(express.static(path.join(__dirname, 'public')));
-
-// API endpoint για τη συνομιλία με δυνατότητα web search
 app.post('/api/chat', async (req, res) => {
     try {
         const { messages, location } = req.body;
@@ -42,7 +38,6 @@ app.post('/api/chat', async (req, res) => {
         const completion = await openai.chat.completions.create({
             model: "gpt-4o",
             messages: fullMessages,
-            tools: [{ type: "web_search" }],
             temperature: 0.7,
         });
 
