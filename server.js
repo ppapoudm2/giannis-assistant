@@ -39,7 +39,6 @@ app.post('/api/chat', async (req, res) => {
 
     contentsArray.push({ text: prompt && prompt.trim() !== '' ? prompt : "Γεια σου Γιάννη!" });
 
-    // Το επίσημο μοντέλο που απαιτείται από το API
     const response = await ai.models.generateContent({
       model: 'gemini-3.6-flash',
       contents: contentsArray,
@@ -54,6 +53,15 @@ app.post('/api/chat', async (req, res) => {
     res.json({ text: replyText });
   } catch (error) {
     console.error("Gemini API Error Detail:", error);
+    
+    // Αν ξεπεραστεί το όριο (429) ή είναι φορτωμένο (503), επιστρέφουμε φιλικό μήνυμα στο frontend
+    if (error.status === 429) {
+      return res.json({ text: "Γιάννη, στέλνεις πολλά αιτήματα μαζί. Περίμενε μισό λεπτό και ξαναπές το!" });
+    }
+    if (error.status === 503) {
+      return res.json({ text: "Το σύστημα είναι λίγο φορτωμένο αυτή τη στιγμή, δοκίμασε ξανά σε λίγο." });
+    }
+
     res.status(500).json({ error: 'Πρόβλημα επικοινωνίας με το Gemini API', details: error.message });
   }
 });
