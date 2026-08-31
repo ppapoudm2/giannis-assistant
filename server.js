@@ -41,7 +41,7 @@ app.post('/api/chat', async (req, res) => {
 
     // Χρήση του σταθερού μοντέλου gemini-2.5-flash για αποφυγή ορίων quota
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.0-flash',
       contents: contentsArray,
       config: {
         systemInstruction: {
