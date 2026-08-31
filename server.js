@@ -39,9 +39,9 @@ app.post('/api/chat', async (req, res) => {
 
     contentsArray.push({ text: prompt && prompt.trim() !== '' ? prompt : "Γεια σου Γιάννη!" });
 
-    // Χρήση του gemini-3.6-flash-lite
+    // Το επίσημο μοντέλο που απαιτείται από το API
     const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash-lite',
+      model: 'gemini-3.6-flash',
       contents: contentsArray,
       config: {
         systemInstruction: {
