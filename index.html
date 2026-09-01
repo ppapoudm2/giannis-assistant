@@ -44,15 +44,9 @@
             padding: 20px;
             background: rgba(15, 23, 42, 0.6);
             display: flex;
-            justify-content: space-between;
+            justify-content: flex-end;
             align-items: center;
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        header h2 {
-            margin: 0;
-            font-size: 20px;
-            color: var(--accent);
         }
 
         .header-info {
@@ -115,7 +109,6 @@
 
     <div id="app-container">
         <header>
-            <h2>✨ Γιάννης AI</h2>
             <div class="header-info" id="headerInfo">
                 <div>Πόλη: Εντοπισμός...</div>
                 <div>Υπόλοιπο: <span id="remainingTokens">10000</span> | Τραβήχτηκαν: <span id="currentTokens">0</span></div>
