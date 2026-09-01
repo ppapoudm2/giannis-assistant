@@ -1,0 +1,1462 @@
+```html
+<!DOCTYPE html>
+<html lang="el">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Γιάννης - Προσωπικός Βοηθός</title>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --accent: #38bdf8;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --user-bubble: #0284c7;
+            --assistant-bubble: #334155;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #app-container {
+            width: 100%;
+            max-width: 750px;
+            height: 92vh;
+            background: var(--card-bg);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,.6);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,.05);
+        }
+
+        #avatar-section {
+            width: 100%;
+            height: 420px;
+            position: relative;
+            background: radial-gradient(circle at center,#1e293b 0%,#0f172a 100%);
+            border-bottom: 1px solid rgba(255,255,255,.05);
+        }
+
+        #avatar-canvas-container {
+            width: 100%;
+            height: 100%;
+        }
+
+        #microphone-control {
+            position: absolute;
+            left: 50%;
+            bottom: 18px;
+            transform: translateX(-50%);
+            z-index: 10;
+        }
+
+        #micButton {
+            border: none;
+            border-radius: 999px;
+            padding: 13px 25px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            color: white;
+            background: #0284c7;
+            box-shadow: 0 4px 15px rgba(0,0,0,.35);
+            transition: .2s;
+        }
+
+        #micButton:hover {
+            transform: scale(1.04);
+        }
+
+        #micButton.active {
+            background: #16a34a;
+            box-shadow: 0 0 18px rgba(34,197,94,.45);
+        }
+
+        #messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 180px;
+        }
+
+        .message {
+            padding: 10px 14px;
+            border-radius: 12px;
+            max-width: 80%;
+            font-size: 14px;
+            line-height: 1.4;
+            word-wrap: break-word;
+        }
+
+        .user {
+            background: var(--user-bubble);
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+
+        .assistant {
+            background: var(--assistant-bubble);
+            color: var(--text-main);
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+        }
+
+        #status-bar {
+            padding: 14px 20px;
+            background: rgba(15,23,42,.6);
+            border-top: 1px solid rgba(255,255,255,.05);
+        }
+
+        #status-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .pulse-dot {
+            width: 12px;
+            height: 12px;
+            min-width: 12px;
+            background: #ef4444;
+            border-radius: 50%;
+        }
+
+        .pulse-dot.active {
+            background: #22c55e;
+            box-shadow: 0 0 10px #22c55e;
+            animation: pulse 1.2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.25); opacity: .65; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        #status-text {
+            font-size: 14px;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        #heard-text {
+            margin-top: 8px;
+            color: #38bdf8;
+            font-size: 13px;
+            min-height: 18px;
+        }
+
+        @media(max-width:600px) {
+            body {
+                min-height: 100dvh;
+            }
+
+            #app-container {
+                height: 100dvh;
+                max-width: none;
+                border-radius: 0;
+            }
+
+            #avatar-section {
+                height: 46vh;
+                min-height: 280px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div id="app-container">
+
+    <div id="avatar-section">
+
+        <div id="avatar-canvas-container"></div>
+
+        <div id="microphone-control">
+            <button id="micButton">
+                🎙️ Ενεργοποίηση μικροφώνου
+            </button>
+        </div>
+
+    </div>
+
+    <div id="messages"></div>
+
+    <div id="status-bar">
+
+        <div id="status-row">
+            <div class="pulse-dot" id="pulseDot"></div>
+
+            <div id="status-text">
+                Πάτησε «Ενεργοποίηση μικροφώνου»
+            </div>
+        </div>
+
+        <div id="heard-text"></div>
+
+    </div>
+
+</div>
+
+
+<script>
+
+/* =========================================================
+   THREE.JS AVATAR
+   ========================================================= */
+
+const container =
+    document.getElementById("avatar-canvas-container");
+
+const scene = new THREE.Scene();
+
+const camera =
+    new THREE.PerspectiveCamera(
+        45,
+        container.clientWidth / container.clientHeight,
+        0.1,
+        1000
+    );
+
+const renderer =
+    new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: true
+    });
+
+renderer.setPixelRatio(
+    Math.min(window.devicePixelRatio || 1, 2)
+);
+
+renderer.setSize(
+    container.clientWidth,
+    container.clientHeight
+);
+
+container.appendChild(renderer.domElement);
+
+
+/* LIGHTS */
+
+const ambientLight =
+    new THREE.AmbientLight(0xffffff, .9);
+
+scene.add(ambientLight);
+
+
+const frontLight =
+    new THREE.DirectionalLight(0x38bdf8, 1.2);
+
+frontLight.position.set(0,2,5);
+
+scene.add(frontLight);
+
+
+const backLight =
+    new THREE.PointLight(0x0284c7,2,10);
+
+backLight.position.set(0,-2,-2);
+
+scene.add(backLight);
+
+
+/* HEAD */
+
+const headGroup =
+    new THREE.Group();
+
+
+const faceGeo =
+    new THREE.SphereGeometry(1.3,32,32);
+
+faceGeo.scale(1,1.3,1.1);
+
+
+const faceMat =
+    new THREE.MeshStandardMaterial({
+        color:0x283548,
+        roughness:.35,
+        metalness:.25
+    });
+
+
+const faceMesh =
+    new THREE.Mesh(faceGeo,faceMat);
+
+headGroup.add(faceMesh);
+
+
+/* EARS */
+
+const earGeo =
+    new THREE.CylinderGeometry(
+        .25,.2,.5,16
+    );
+
+earGeo.rotateZ(Math.PI/2);
+
+
+const earMat =
+    new THREE.MeshStandardMaterial({
+        color:0x222d3d,
+        roughness:.5
+    });
+
+
+const leftEar =
+    new THREE.Mesh(earGeo,earMat);
+
+leftEar.position.set(-1.25,.1,0);
+
+headGroup.add(leftEar);
+
+
+const rightEar =
+    new THREE.Mesh(earGeo,earMat);
+
+rightEar.position.set(1.25,.1,0);
+
+headGroup.add(rightEar);
+
+
+/* EYES */
+
+const eyeBgGeo =
+    new THREE.SphereGeometry(.22,16,16);
+
+const eyeBgMat =
+    new THREE.MeshStandardMaterial({
+        color:0xffffff
+    });
+
+
+const irisGeo =
+    new THREE.SphereGeometry(.12,16,16);
+
+const irisMat =
+    new THREE.MeshStandardMaterial({
+        color:0x38bdf8,
+        emissive:0x0284c7,
+        emissiveIntensity:.5
+    });
+
+
+const leftEyeGroup =
+    new THREE.Group();
+
+const leftEyeWhite =
+    new THREE.Mesh(
+        eyeBgGeo,
+        eyeBgMat
+    );
+
+const leftIris =
+    new THREE.Mesh(
+        irisGeo,
+        irisMat
+    );
+
+leftIris.position.z=.12;
+
+leftEyeGroup.add(
+    leftEyeWhite,
+    leftIris
+);
+
+leftEyeGroup.position.set(
+    -.45,.35,1.05
+);
+
+headGroup.add(leftEyeGroup);
+
+
+const rightEyeGroup =
+    new THREE.Group();
+
+const rightEyeWhite =
+    new THREE.Mesh(
+        eyeBgGeo,
+        eyeBgMat
+    );
+
+const rightIris =
+    new THREE.Mesh(
+        irisGeo,
+        irisMat
+    );
+
+rightIris.position.z=.12;
+
+rightEyeGroup.add(
+    rightEyeWhite,
+    rightIris
+);
+
+rightEyeGroup.position.set(
+    .45,.35,1.05
+);
+
+headGroup.add(rightEyeGroup);
+
+
+/* BROWS */
+
+const browGeo =
+    new THREE.BoxGeometry(.4,.07,.1);
+
+const browMat =
+    new THREE.MeshStandardMaterial({
+        color:0x1e293b
+    });
+
+
+const leftBrow =
+    new THREE.Mesh(
+        browGeo,
+        browMat
+    );
+
+leftBrow.position.set(
+    -.45,.65,1.15
+);
+
+leftBrow.rotation.z=-.08;
+
+headGroup.add(leftBrow);
+
+
+const rightBrow =
+    new THREE.Mesh(
+        browGeo,
+        browMat
+    );
+
+rightBrow.position.set(
+    .45,.65,1.15
+);
+
+rightBrow.rotation.z=.08;
+
+headGroup.add(rightBrow);
+
+
+/* NOSE */
+
+const noseGeo =
+    new THREE.ConeGeometry(
+        .15,.4,16
+    );
+
+noseGeo.rotateX(Math.PI/2);
+
+
+const noseMat =
+    new THREE.MeshStandardMaterial({
+        color:0x222d3d,
+        roughness:.4
+    });
+
+
+const nose =
+    new THREE.Mesh(
+        noseGeo,
+        noseMat
+    );
+
+nose.position.set(
+    0,.05,1.25
+);
+
+headGroup.add(nose);
+
+
+/* MOUTH */
+
+const mouthGeo =
+    new THREE.BoxGeometry(
+        .6,.12,.2
+    );
+
+const mouthMat =
+    new THREE.MeshStandardMaterial({
+        color:0x0f172a,
+        roughness:.8
+    });
+
+
+const mouthMesh =
+    new THREE.Mesh(
+        mouthGeo,
+        mouthMat
+    );
+
+mouthMesh.position.set(
+    0,-.5,1.15
+);
+
+headGroup.add(mouthMesh);
+
+
+scene.add(headGroup);
+
+camera.position.z=4;
+
+
+const clock =
+    new THREE.Clock();
+
+let isTalking=false;
+
+
+function animateAvatar(){
+
+    requestAnimationFrame(
+        animateAvatar
+    );
+
+    const time =
+        clock.getElapsedTime();
+
+
+    headGroup.rotation.y =
+        Math.sin(time*1.2)*.12;
+
+    headGroup.rotation.x =
+        Math.cos(time)*.06;
+
+
+    if(isTalking){
+
+        mouthMesh.scale.y =
+            1 +
+            Math.abs(
+                Math.sin(time*22)
+            )*3.5;
+
+    }else{
+
+        mouthMesh.scale.y=1;
+
+    }
+
+
+    renderer.render(
+        scene,
+        camera
+    );
+}
+
+animateAvatar();
+
+
+function resizeAvatar(){
+
+    const width =
+        container.clientWidth;
+
+    const height =
+        container.clientHeight;
+
+    if(!width || !height) return;
+
+    camera.aspect =
+        width/height;
+
+    camera.updateProjectionMatrix();
+
+    renderer.setSize(
+        width,
+        height,
+        false
+    );
+}
+
+window.addEventListener(
+    "resize",
+    resizeAvatar
+);
+
+resizeAvatar();
+
+
+/* =========================================================
+   VARIABLES
+   ========================================================= */
+
+const messagesDiv =
+    document.getElementById("messages");
+
+const statusText =
+    document.getElementById("status-text");
+
+const heardText =
+    document.getElementById("heard-text");
+
+const pulseDot =
+    document.getElementById("pulseDot");
+
+const micButton =
+    document.getElementById("micButton");
+
+
+let recognition=null;
+
+let recognitionRunning=false;
+
+let shouldListen=false;
+
+let isListeningActive=false;
+
+let isAssistantSpeaking=false;
+
+let commandInProgress=false;
+
+let restartTimer=null;
+
+let selectedVoice=null;
+
+let userLocation=null;
+
+let conversationHistory=[];
+
+
+/* =========================================================
+   VOICE
+   ========================================================= */
+
+function loadVoices(){
+
+    const voices =
+        speechSynthesis.getVoices();
+
+    selectedVoice =
+        voices.find(
+            v =>
+                v.lang &&
+                v.lang.toLowerCase().startsWith("el")
+        )
+        ||
+        voices[0]
+        ||
+        null;
+}
+
+speechSynthesis.onvoiceschanged =
+    loadVoices;
+
+loadVoices();
+
+
+/* =========================================================
+   LOCATION
+   ========================================================= */
+
+if(navigator.geolocation){
+
+    navigator.geolocation.getCurrentPosition(
+        position => {
+
+            userLocation={
+                lat:position.coords.latitude,
+                lon:position.coords.longitude
+            };
+
+        },
+        ()=>{}
+    );
+}
+
+
+/* =========================================================
+   MESSAGES
+   ========================================================= */
+
+function appendMessage(
+    role,
+    text
+){
+
+    const message =
+        document.createElement("div");
+
+    message.className =
+        "message " +
+        (
+            role==="user"
+            ? "user"
+            : "assistant"
+        );
+
+    message.textContent=text;
+
+    messagesDiv.appendChild(
+        message
+    );
+
+    messagesDiv.scrollTop =
+        messagesDiv.scrollHeight;
+}
+
+
+/* =========================================================
+   NORMALIZE GREEK
+   ========================================================= */
+
+function normalizeGreek(text){
+
+    return text
+        .normalize("NFD")
+        .replace(
+            /[\u0300-\u036f]/g,
+            ""
+        )
+        .toLowerCase()
+        .replace(/ς/g,"σ")
+        .trim();
+}
+
+
+/* =========================================================
+   WAKE WORD
+   ========================================================= */
+
+function containsWakeWord(text){
+
+    const normalized =
+        normalizeGreek(text);
+
+    return (
+        normalized.includes("γιαννη") ||
+        normalized.includes("γιαννησ")
+    );
+}
+
+
+function removeWakeWord(text){
+
+    return normalizeGreek(text)
+        .replace(
+            /\bγιαννη\b/g,
+            ""
+        )
+        .replace(
+            /\bγιαννησ\b/g,
+            ""
+        )
+        .replace(
+            /\s+/g,
+            " "
+        )
+        .trim();
+}
+
+
+/* =========================================================
+   SPEAK
+   ========================================================= */
+
+function speak(text){
+
+    speechSynthesis.cancel();
+
+    isAssistantSpeaking=true;
+
+    isTalking=true;
+
+    statusText.innerText=
+        "Ο Γιάννης μιλάει...";
+
+
+    const utterance =
+        new SpeechSynthesisUtterance(
+            text
+        );
+
+
+    utterance.lang="el-GR";
+
+    utterance.rate=1.05;
+
+    utterance.pitch=1;
+
+
+    if(selectedVoice){
+
+        utterance.voice=
+            selectedVoice;
+    }
+
+
+    utterance.onend=()=>{
+
+        isAssistantSpeaking=false;
+
+        isTalking=false;
+
+        commandInProgress=false;
+
+        isListeningActive=false;
+
+        statusText.innerText=
+            "Περιμένω τη λέξη «Γιάννη»...";
+
+        heardText.innerText="";
+
+    };
+
+
+    utterance.onerror=
+        utterance.onend;
+
+
+    speechSynthesis.speak(
+        utterance
+    );
+}
+
+
+/* =========================================================
+   STOP
+   ========================================================= */
+
+function stopEverything(){
+
+    speechSynthesis.cancel();
+
+    isAssistantSpeaking=false;
+
+    isTalking=false;
+
+    commandInProgress=false;
+
+    isListeningActive=false;
+
+    statusText.innerText=
+        "Περιμένω τη λέξη «Γιάννη»...";
+}
+
+
+/* =========================================================
+   PROCESS COMMAND
+   ========================================================= */
+
+async function processCommand(
+    query
+){
+
+    if(
+        commandInProgress ||
+        !query ||
+        query.trim().length<2
+    ){
+        return;
+    }
+
+
+    commandInProgress=true;
+
+    isListeningActive=false;
+
+
+    appendMessage(
+        "user",
+        query
+    );
+
+
+    conversationHistory.push({
+        role:"user",
+        content:query
+    });
+
+
+    conversationHistory=
+        conversationHistory.slice(-5);
+
+
+    statusText.innerText=
+        "Σκέφτομαι...";
+
+
+    try{
+
+        const response =
+            await fetch(
+                "/api/chat",
+                {
+                    method:"POST",
+
+                    headers:{
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body:JSON.stringify({
+                        messages:
+                            conversationHistory,
+
+                        location:
+                            userLocation
+                    })
+                }
+            );
+
+
+        const data =
+            await response.json();
+
+
+        if(!response.ok){
+
+            throw new Error(
+                data?.reply ||
+                "Σφάλμα server"
+            );
+        }
+
+
+        const reply =
+            String(
+                data.reply || ""
+            ).trim();
+
+
+        if(!reply){
+
+            throw new Error(
+                "Κενή απάντηση"
+            );
+        }
+
+
+        appendMessage(
+            "assistant",
+            reply
+        );
+
+
+        conversationHistory.push({
+            role:"assistant",
+            content:reply
+        });
+
+
+        conversationHistory=
+            conversationHistory.slice(-5);
+
+
+        speak(reply);
+
+    }catch(error){
+
+        console.error(error);
+
+        commandInProgress=false;
+
+        statusText.innerText=
+            "Σφάλμα επικοινωνίας με τον server.";
+
+    }
+}
+
+
+/* =========================================================
+   SPEECH RECOGNITION
+   ========================================================= */
+
+const SpeechRecognition =
+    window.SpeechRecognition ||
+    window.webkitSpeechRecognition;
+
+
+if(!SpeechRecognition){
+
+    micButton.disabled=true;
+
+    micButton.innerText=
+        "❌ Δεν υποστηρίζεται";
+
+    statusText.innerText=
+        "Ο browser δεν υποστηρίζει Speech Recognition.";
+
+}else{
+
+    recognition =
+        new SpeechRecognition();
+
+
+    /*
+       ΣΗΜΑΝΤΙΚΟ:
+
+       false = ένας κύκλος κάθε φορά.
+       Μετά το onend κάνουμε restart.
+    */
+
+    recognition.continuous=false;
+
+    recognition.interimResults=true;
+
+    recognition.maxAlternatives=3;
+
+    recognition.lang="el-GR";
+
+
+    /* START */
+
+    recognition.onstart=()=>{
+
+        recognitionRunning=true;
+
+        pulseDot.classList.add(
+            "active"
+        );
+
+        micButton.classList.add(
+            "active"
+        );
+
+        micButton.innerText=
+            "🎙️ Μικρόφωνο ενεργό";
+
+
+        if(!isAssistantSpeaking){
+
+            if(isListeningActive){
+
+                statusText.innerText=
+                    "Ενεργός — πες την ερώτησή σου...";
+
+            }else{
+
+                statusText.innerText=
+                    "Περιμένω τη λέξη «Γιάννη»...";
+            }
+        }
+    };
+
+
+    /* AUDIO START */
+
+    recognition.onaudiostart=()=>{
+
+        heardText.innerText=
+            "🎤 Ακούω...";
+
+    };
+
+
+    /* SPEECH START */
+
+    recognition.onspeechstart=()=>{
+
+        heardText.innerText=
+            "👂 Σε ακούω...";
+
+    };
+
+
+    /* RESULT */
+
+    recognition.onresult=
+        async event=>{
+
+            if(isAssistantSpeaking){
+
+                return;
+            }
+
+
+            let finalText="";
+
+            let interimText="";
+
+
+            for(
+                let i=event.resultIndex;
+                i<event.results.length;
+                i++
+            ){
+
+                const result=
+                    event.results[i];
+
+                const transcript=
+                    result[0]
+                        .transcript
+                        .trim();
+
+
+                if(result.isFinal){
+
+                    finalText +=
+                        transcript+" ";
+
+                }else{
+
+                    interimText +=
+                        transcript+" ";
+                }
+            }
+
+
+            /*
+               Δείχνουμε ΤΙ ακριβώς
+               αναγνωρίζει ο browser.
+            */
+
+            const displayText =
+                (
+                    finalText ||
+                    interimText
+                ).trim();
+
+
+            if(displayText){
+
+                heardText.innerText =
+                    "👂 Άκουσα: «" +
+                    displayText +
+                    "»";
+            }
+
+
+            /*
+               Δεν επεξεργαζόμαστε
+               ακόμα interim αποτέλεσμα.
+            */
+
+            if(!finalText){
+
+                return;
+            }
+
+
+            const raw =
+                finalText.trim();
+
+
+            const normalized =
+                normalizeGreek(raw);
+
+
+            console.log(
+                "VOICE RESULT:",
+                raw
+            );
+
+
+            /*
+               STOP
+            */
+
+            if(
+                normalized.includes("σταματα") ||
+                normalized.includes("στοπ")
+            ){
+
+                stopEverything();
+
+                return;
+            }
+
+
+            /*
+               WAKE WORD
+            */
+
+            if(!isListeningActive){
+
+                if(
+                    containsWakeWord(raw)
+                ){
+
+                    isListeningActive=true;
+
+                    statusText.innerText=
+                        "Ενεργός — πες την ερώτησή σου...";
+
+
+                    const query =
+                        removeWakeWord(raw);
+
+
+                    /*
+                       Αν είπε:
+
+                       «Γιάννη τι ώρα είναι»
+
+                       στην ίδια πρόταση,
+                       εκτελούμε αμέσως.
+                    */
+
+                    if(
+                        query.length>=2
+                    ){
+
+                        await processCommand(
+                            query
+                        );
+
+                    }
+
+                }
+
+                return;
+            }
+
+
+            /*
+               Είμαστε ήδη ενεργοί.
+            */
+
+            await processCommand(
+                raw
+            );
+        };
+
+
+    /* NOMATCH */
+
+    recognition.onnomatch=()=>{
+
+        heardText.innerText=
+            "🤔 Δεν κατάλαβα τι είπες.";
+
+    };
+
+
+    /* ERROR */
+
+    recognition.onerror=
+        event=>{
+
+            console.error(
+                "SpeechRecognition ERROR:",
+                event.error
+            );
+
+
+            heardText.innerText=
+                "⚠️ Σφάλμα: " +
+                event.error;
+
+
+            if(
+                event.error==="not-allowed" ||
+                event.error==="service-not-allowed"
+            ){
+
+                shouldListen=false;
+
+                recognitionRunning=false;
+
+                micButton.classList.remove(
+                    "active"
+                );
+
+                micButton.innerText=
+                    "🎙️ Ενεργοποίηση μικροφώνου";
+
+
+                statusText.innerText=
+                    "Δεν επιτρέπεται η χρήση μικροφώνου.";
+
+                return;
+            }
+
+
+            if(
+                event.error==="audio-capture"
+            ){
+
+                statusText.innerText=
+                    "Δεν βρέθηκε μικρόφωνο.";
+
+                return;
+            }
+
+
+            if(
+                event.error==="network"
+            ){
+
+                statusText.innerText=
+                    "Σφάλμα δικτύου φωνητικής αναγνώρισης.";
+
+                return;
+            }
+        };
+
+
+    /* END */
+
+    recognition.onend=()=>{
+
+        recognitionRunning=false;
+
+
+        if(
+            shouldListen &&
+            !isAssistantSpeaking
+        ){
+
+            clearTimeout(
+                restartTimer
+            );
+
+
+            restartTimer=
+                setTimeout(
+                    startRecognition,
+                    350
+                );
+        }
+    };
+
+
+    /* START FUNCTION */
+
+    function startRecognition(){
+
+        if(
+            !shouldListen ||
+            isAssistantSpeaking
+        ){
+
+            return;
+        }
+
+
+        if(recognitionRunning){
+
+            return;
+        }
+
+
+        try{
+
+            recognition.start();
+
+        }catch(error){
+
+            console.warn(
+                "Recognition start:",
+                error
+            );
+
+            recognitionRunning=false;
+
+            setTimeout(
+                startRecognition,
+                500
+            );
+        }
+    }
+
+
+    /* STOP FUNCTION */
+
+    function stopRecognition(){
+
+        shouldListen=false;
+
+        clearTimeout(
+            restartTimer
+        );
+
+
+        if(recognitionRunning){
+
+            try{
+
+                recognition.stop();
+
+            }catch(error){}
+
+        }
+
+
+        recognitionRunning=false;
+
+        isListeningActive=false;
+
+        pulseDot.classList.remove(
+            "active"
+        );
+
+        micButton.classList.remove(
+            "active"
+        );
+
+        micButton.innerText=
+            "🎙️ Ενεργοποίηση μικροφώνου";
+
+
+        statusText.innerText=
+            "Το μικρόφωνο είναι κλειστό.";
+
+        heardText.innerText="";
+    }
+
+
+    /* =====================================================
+       MICROPHONE BUTTON
+       ===================================================== */
+
+    micButton.addEventListener(
+        "click",
+        ()=>{
+
+            if(shouldListen){
+
+                stopRecognition();
+
+                return;
+            }
+
+
+            shouldListen=true;
+
+            isListeningActive=false;
+
+            commandInProgress=false;
+
+            heardText.innerText=
+                "🎤 Προσπαθώ να ξεκινήσω την αναγνώριση...";
+
+
+            startRecognition();
+        }
+    );
+
+}
+
+</script>
+
+</body>
+</html>
+```
