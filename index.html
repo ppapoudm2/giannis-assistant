@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Γιάννης - Προσωπικός Βοηθός</title>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --user-bubble: #0284c7;
+            --assistant-bubble: #334155;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #app-container {
+            width: 100%;
+            max-width: 750px;
+            height: 92vh;
+            background: var(--card-bg);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        #avatar-section {
+            width: 100%;
+            height: 420px;
+            position: relative;
+            background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        #avatar-canvas-container { width: 100%; height: 100%; }
+
+        #messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 220px;
+        }
+
+        .message {
+            padding: 10px 14px;
+            border-radius: 12px;
+            max-width: 80%;
+            font-size: 14px;
+            line-height: 1.4;
+            word-wrap: break-word;
+        }
+
+        .user {
+            background: var(--user-bubble);
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+
+        .assistant {
+            background: var(--assistant-bubble);
+            color: var(--text-main);
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+        }
+
+        #status-bar {
+            padding: 14px 20px;
+            background: rgba(15,23,42,0.7);
+            border-top: 1px solid rgba(255,255,255,0.05);
+        }
+
+        #status-row { display: flex; align-items: center; gap: 12px; }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            min-width: 12px;
+            background: #ef4444;
+            border-radius: 50%;
+        }
+
+        .status-dot.listening {
+            background: #22c55e;
+            box-shadow: 0 0 10px #22c55e;
+            animation: pulse 1.2s infinite;
+        }
+
+        .status-dot.active {
+            background: #38bdf8;
+            box-shadow: 0 0 15px #38bdf8;
+            animation: pulse 0.8s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.25); opacity: 0.65; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        #status-text { font-size: 14px; color: var(--text-muted); font-weight: 500; }
+
+        #heard-text {
+            margin-top: 7px;
+            color: #38bdf8;
+            font-size: 13px;
+            min-height: 18px;
+        }
+
+        #debug-log {
+            margin-top: 6px;
+            color: #475569;
+            font-size: 11px;
+            min-height: 14px;
+            font-family: monospace;
+        }
+
+        @media(max-width:600px) {
+            body { min-height: 100dvh; }
+            #app-container { height: 100dvh; max-width: none; border-radius: 0; }
+            #avatar-section { height: 46vh; min-height: 280px; }
+        }
+    </style>
+</head>
+
+<body>
+
+<div id="app-container">
+
+    <div id="avatar-section">
+        <div id="avatar-canvas-container"></div>
+    </div>
+
+    <div id="messages"></div>
+
+    <div id="status-bar">
+        <div id="status-row">
+            <div class="status-dot" id="status-dot"></div>
+            <div id="status-text">Περιμένω τη λέξη «Γιάννη»...</div>
+        </div>
+        <div id="heard-text"></div>
+        <div id="debug-log"></div>
+    </div>
+
+</div>
+
+
+<script>
+
+/* =========================================================
+   THREE.JS AVATAR
+   ========================================================= */
+
+const container = document.getElementById("avatar-canvas-container");
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(container.clientWidth, container.clientHeight);
+container.appendChild(renderer.domElement);
+
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
+scene.add(ambientLight);
+
+const frontLight = new THREE.DirectionalLight(0x38bdf8, 1.2);
+frontLight.position.set(0, 2, 5);
+scene.add(frontLight);
+
+const backLight = new THREE.PointLight(0x0284c7, 2, 10);
+backLight.position.set(0, -2, -2);
+scene.add(backLight);
+
+const headGroup = new THREE.Group();
+
+const faceGeo = new THREE.SphereGeometry(1.3, 32, 32);
+faceGeo.scale(1, 1.3, 1.1);
+const faceMat = new THREE.MeshStandardMaterial({ color: 0x283548, roughness: 0.35, metalness: 0.25 });
+const faceMesh = new THREE.Mesh(faceGeo, faceMat);
+headGroup.add(faceMesh);
+
+const earGeo = new THREE.CylinderGeometry(0.25, 0.2, 0.5, 16);
+earGeo.rotateZ(Math.PI / 2);
+const earMat = new THREE.MeshStandardMaterial({ color: 0x222d3d, roughness: 0.5 });
+const leftEar = new THREE.Mesh(earGeo, earMat);
+leftEar.position.set(-1.25, 0.1, 0);
+headGroup.add(leftEar);
+const rightEar = new THREE.Mesh(earGeo, earMat);
+rightEar.position.set(1.25, 0.1, 0);
+headGroup.add(rightEar);
+
+const eyeBgGeo = new THREE.SphereGeometry(0.22, 16, 16);
+const eyeBgMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+const irisGeo = new THREE.SphereGeometry(0.12, 16, 16);
+const irisMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7, emissiveIntensity: 0.5 });
+
+const leftEyeGroup = new THREE.Group();
+const leftEyeWhite = new THREE.Mesh(eyeBgGeo, eyeBgMat);
+const leftIris = new THREE.Mesh(irisGeo, irisMat);
+leftIris.position.z = 0.12;
+leftEyeGroup.add(leftEyeWhite, leftIris);
+leftEyeGroup.position.set(-0.45, 0.35, 1.05);
+headGroup.add(leftEyeGroup);
+
+const rightEyeGroup = new THREE.Group();
+const rightEyeWhite = new THREE.Mesh(eyeBgGeo, eyeBgMat);
+const rightIris = new THREE.Mesh(irisGeo, irisMat);
+rightIris.position.z = 0.12;
+rightEyeGroup.add(rightEyeWhite, rightIris);
+rightEyeGroup.position.set(0.45, 0.35, 1.05);
+headGroup.add(rightEyeGroup);
+
+const browGeo = new THREE.BoxGeometry(0.4, 0.07, 0.1);
+const browMat = new THREE.MeshStandardMaterial({ color: 0x1e293b });
+const leftBrow = new THREE.Mesh(browGeo, browMat);
+leftBrow.position.set(-0.45, 0.65, 1.15);
+leftBrow.rotation.z = -0.08;
+headGroup.add(leftBrow);
+const rightBrow = new THREE.Mesh(browGeo, browMat);
+rightBrow.position.set(0.45, 0.65, 1.15);
+rightBrow.rotation.z = 0.08;
+headGroup.add(rightBrow);
+
+const noseGeo = new THREE.ConeGeometry(0.15, 0.4, 16);
+noseGeo.rotateX(Math.PI / 2);
+const noseMat = new THREE.MeshStandardMaterial({ color: 0x222d3d, roughness: 0.4 });
+const nose = new THREE.Mesh(noseGeo, noseMat);
+nose.position.set(0, 0.05, 1.25);
+headGroup.add(nose);
+
+const mouthGeo = new THREE.BoxGeometry(0.6, 0.12, 0.2);
+const mouthMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.8 });
+const mouthMesh = new THREE.Mesh(mouthGeo, mouthMat);
+mouthMesh.position.set(0, -0.5, 1.15);
+headGroup.add(mouthMesh);
+
+scene.add(headGroup);
+camera.position.z = 4;
+
+const clock = new THREE.Clock();
+let isTalking = false;
+
+function animateAvatar() {
+    requestAnimationFrame(animateAvatar);
+    const time = clock.getElapsedTime();
+    headGroup.rotation.y = Math.sin(time * 1.2) * 0.12;
+    headGroup.rotation.x = Math.cos(time) * 0.06;
+    if (isTalking) {
+        mouthMesh.scale.y = 1 + Math.abs(Math.sin(time * 22)) * 3.5;
+    } else {
+        mouthMesh.scale.y = 1;
+    }
+    renderer.render(scene, camera);
+}
+animateAvatar();
+
+function resizeAvatar() {
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    if (!width || !height) return;
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+    renderer.setSize(width, height, false);
+}
+window.addEventListener("resize", resizeAvatar);
+resizeAvatar();
+
+
+/* =========================================================
+   VOICE ASSISTANT
+   ========================================================= */
+
+const statusDot = document.getElementById("status-dot");
+const statusText = document.getElementById("status-text");
+const heardText = document.getElementById("heard-text");
+const debugLog = document.getElementById("debug-log");
+const messagesDiv = document.getElementById("messages");
+
+let conversationActive = false;   // false = περιμένει «Γιάννη», true = σε συνομιλία
+let shouldListen = true;          // το μικρόφωνο πρέπει να λειτουργεί μόνιμα
+let recognitionRunning = false;
+let recognitionRestartTimer = null;
+let processingCommand = false;
+let assistantSpeaking = false;    // true όσο μιλάει το TTS (δεν ακούμε τον εαυτό μας)
+let conversationHistory = [];
+let selectedVoice = null;
+let userLocation = null;
+
+function log(msg) {
+    console.log(msg);
+    debugLog.innerText = msg;
+}
+
+/* =========================================================
+   VOICE SELECTION
+   ========================================================= */
+
+function loadVoices() {
+    const voices = window.speechSynthesis.getVoices();
+    selectedVoice =
+        voices.find(v => v.lang && v.lang.toLowerCase().startsWith("el")) ||
+        voices[0] ||
+        null;
+}
+window.speechSynthesis.onvoiceschanged = loadVoices;
+loadVoices();
+
+/* =========================================================
+   GEOLOCATION
+   ========================================================= */
+
+if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+        position => {
+            userLocation = { lat: position.coords.latitude, lon: position.coords.longitude };
+        },
+        () => {}
+    );
+}
+
+/* =========================================================
+   NORMALIZE GREEK
+   ========================================================= */
+
+function normalizeGreek(text) {
+    return String(text || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/ς/g, "σ")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+/* =========================================================
+   WAKE WORD
+   Πιάνουμε "γιαννη"/"γιαννησ" και μερικές παραλλαγές που
+   συχνά βγάζει η αναγνώριση φωνής (γιανη, γιαννι, τζιαννη).
+   ========================================================= */
+
+const WAKE_PATTERNS = [
+    "γιαννη",
+    "γιαννησ",
+    "γιανη",
+    "γιαννι",
+    "τζιαννη"
+];
+
+function hasWakeWord(text) {
+    const normalized = normalizeGreek(text);
+    return WAKE_PATTERNS.some(pattern => normalized.includes(pattern));
+}
+
+function removeWakeWord(text) {
+    let normalized = normalizeGreek(text);
+    for (const pattern of WAKE_PATTERNS) {
+        normalized = normalized.replace(new RegExp("\\b" + pattern + "\\b", "g"), "");
+    }
+    return normalized.replace(/\s+/g, " ").trim();
+}
+
+/* =========================================================
+   STOP COMMAND
+   ========================================================= */
+
+function isStopCommand(text) {
+    const normalized = normalizeGreek(text);
+    return (
+        normalized === "στοπ" ||
+        normalized.includes("σταματα") ||
+        normalized.includes("σταματησε")
+    );
+}
+
+/* =========================================================
+   UI STATUS
+   ========================================================= */
+
+function setWaitingState() {
+    conversationActive = false;
+    processingCommand = false;
+    statusDot.classList.remove("active");
+    statusDot.classList.add("listening");
+    statusText.innerText = "Περιμένω τη λέξη «Γιάννη»...";
+}
+
+function setConversationState() {
+    conversationActive = true;
+    statusDot.classList.remove("listening");
+    statusDot.classList.add("active");
+    statusText.innerText = "Σε ακούω...";
+}
+
+/* =========================================================
+   MESSAGES
+   ========================================================= */
+
+function appendMessage(role, text) {
+    const message = document.createElement("div");
+    message.className = "message " + (role === "user" ? "user" : "assistant");
+    message.textContent = text;
+    messagesDiv.appendChild(message);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+/* =========================================================
+   SPEAK
+   ========================================================= */
+
+function speak(text) {
+    window.speechSynthesis.cancel();
+
+    assistantSpeaking = true;
+    isTalking = true;
+
+    /*
+       ΣΗΜΑΝΤΙΚΟ: όσο μιλάει ο Γιάννης, σταματάμε εντελώς
+       το recognition (δεν το αφήνουμε απλά σε pause),
+       ώστε να μην ακούει τον εαυτό του. Το ξανανοίγουμε
+       ρητά όταν το TTS τελειώσει.
+    */
+    shouldListen = false;
+    stopRecognitionHard();
+
+    statusText.innerText = "Ο Γιάννης μιλάει...";
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "el-GR";
+    utterance.rate = 1.05;
+    utterance.pitch = 1;
+    if (selectedVoice) utterance.voice = selectedVoice;
+
+    const onDone = () => {
+        assistantSpeaking = false;
+        isTalking = false;
+
+        if (conversationActive) {
+            statusText.innerText = "Σε ακούω...";
+        } else {
+            setWaitingState();
+        }
+
+        /*
+           Ξαναρχίζουμε να ακούμε ΤΩΡΑ που τελείωσε το TTS.
+           Αυτό είναι το κομμάτι που έλειπε στην αρχική
+           έκδοση: χωρίς αυτό, το recognition δεν ξανάνοιγε
+           ποτέ μετά την πρώτη φορά που μιλούσε ο Γιάννης.
+        */
+        shouldListen = true;
+        scheduleRestart(300);
+    };
+
+    utterance.onend = onDone;
+    utterance.onerror = onDone;
+
+    window.speechSynthesis.speak(utterance);
+}
+
+/* =========================================================
+   ACTIVATE WITH "ΓΙΑΝΝΗ"
+   ========================================================= */
+
+function activateAssistant(firstQuery = "") {
+    conversationActive = true;
+    setConversationState();
+
+    if (firstQuery) {
+        processCommand(firstQuery);
+    } else {
+        speak("Σε άκουσα.");
+    }
+}
+
+/* =========================================================
+   STOP CONVERSATION
+   ========================================================= */
+
+function stopConversation() {
+    conversationActive = false;
+    processingCommand = false;
+
+    window.speechSynthesis.cancel();
+    assistantSpeaking = false;
+    isTalking = false;
+
+    statusDot.classList.remove("active");
+    statusDot.classList.add("listening");
+    heardText.innerText = "";
+
+    statusText.innerText = "Εντάξει. Περιμένω τη λέξη «Γιάννη»...";
+
+    /* Βεβαιωνόμαστε ότι το μικρόφωνο συνεχίζει να ακούει */
+    shouldListen = true;
+    scheduleRestart(200);
+}
+
+/* =========================================================
+   CHAT API
+   ========================================================= */
+
+async function processCommand(query) {
+    if (processingCommand || !query || query.trim().length < 1) return;
+
+    processingCommand = true;
+    const cleanQuery = query.trim();
+
+    appendMessage("user", cleanQuery);
+    conversationHistory.push({ role: "user", content: cleanQuery });
+    conversationHistory = conversationHistory.slice(-5);
+
+    statusText.innerText = "Σκέφτομαι...";
+
+    try {
+        const response = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ messages: conversationHistory, location: userLocation })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data?.reply || "Σφάλμα server");
+        }
+
+        const reply = String(data?.reply || "").trim();
+        if (!reply) throw new Error("Κενή απάντηση");
+
+        conversationHistory.push({ role: "assistant", content: reply });
+        conversationHistory = conversationHistory.slice(-5);
+
+        appendMessage("assistant", reply);
+        processingCommand = false;
+
+        if (!conversationActive) return;
+
+        speak(reply);
+
+    } catch (error) {
+        console.error("Chat error:", error);
+        processingCommand = false;
+
+        if (conversationActive) {
+            statusText.innerText = "Δεν μπόρεσα να επικοινωνήσω με τον server.";
+            setTimeout(() => {
+                if (conversationActive && !assistantSpeaking) {
+                    statusText.innerText = "Σε ακούω...";
+                }
+            }, 2000);
+        }
+
+        /* Έστω κι αν απέτυχε το fetch, το μικρόφωνο πρέπει να συνεχίσει */
+        scheduleRestart(300);
+    }
+}
+
+/* =========================================================
+   SPEECH RECOGNITION
+   ========================================================= */
+
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+if (!SpeechRecognition) {
+
+    statusText.innerText = "Ο browser δεν υποστηρίζει φωνητική αναγνώριση.";
+    statusDot.classList.remove("listening");
+
+} else {
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 5;
+    recognition.lang = "el-GR";
+
+    recognition.onstart = () => {
+        recognitionRunning = true;
+        if (!assistantSpeaking) {
+            statusText.innerText = conversationActive ? "Σε ακούω..." : "Περιμένω τη λέξη «Γιάννη»...";
+        }
+    };
+
+    recognition.onaudiostart = () => {
+        if (!assistantSpeaking) heardText.innerText = "🎤 Ακούω...";
+    };
+
+    recognition.onspeechstart = () => {
+        if (!assistantSpeaking) heardText.innerText = "👂 Σε ακούω...";
+    };
+
+    recognition.onresult = async event => {
+        if (assistantSpeaking) return;
+
+        let finalText = "";
+        let interimText = "";
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+            const result = event.results[i];
+            const transcript = result[0].transcript.trim();
+            if (result.isFinal) {
+                finalText += transcript + " ";
+            } else {
+                interimText += transcript + " ";
+            }
+        }
+
+        const shownText = (finalText || interimText).trim();
+        if (shownText) heardText.innerText = "👂 " + shownText;
+
+        if (!finalText) return;
+
+        const raw = finalText.trim();
+        log("Αναγνωρίστηκε: " + raw);
+
+        if (isStopCommand(raw)) {
+            stopConversation();
+            return;
+        }
+
+        if (!conversationActive) {
+            if (hasWakeWord(raw)) {
+                const query = removeWakeWord(raw);
+                activateAssistant(query);
+            }
+            return;
+        }
+
+        if (conversationActive && !processingCommand) {
+            await processCommand(raw);
+        }
+    };
+
+    recognition.onerror = event => {
+        console.warn("SpeechRecognition error:", event.error);
+
+        if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+            shouldListen = false;
+            recognitionRunning = false;
+            statusDot.classList.remove("listening", "active");
+            statusText.innerText = "Δεν επιτρέπεται η χρήση του μικροφώνου.";
+            return;
+        }
+
+        if (event.error === "audio-capture") {
+            statusText.innerText = "Δεν βρέθηκε μικρόφωνο.";
+            return;
+        }
+
+        /* no-speech / aborted / network είναι φυσιολογικά — απλά θα γίνει restart από onend */
+    };
+
+    recognition.onend = () => {
+        recognitionRunning = false;
+        if (shouldListen) {
+            scheduleRestart(250);
+        }
+    };
+
+    function scheduleRestart(delay) {
+        clearTimeout(recognitionRestartTimer);
+        recognitionRestartTimer = setTimeout(startRecognition, delay);
+    }
+
+    function startRecognition() {
+        if (!shouldListen || assistantSpeaking) {
+            /*
+               Αν δεν μπορούμε να ξεκινήσουμε τώρα, ΔΕΝ σταματάμε
+               σιωπηλά — προγραμματίζουμε νέα προσπάθεια, εκτός
+               αν το TTS θα καλέσει ήδη scheduleRestart όταν
+               τελειώσει (βλ. speak()).
+            */
+            return;
+        }
+
+        if (recognitionRunning) return;
+
+        try {
+            recognition.start();
+        } catch (error) {
+            recognitionRunning = false;
+            scheduleRestart(500);
+        }
+    }
+
+    function stopRecognitionHard() {
+        clearTimeout(recognitionRestartTimer);
+        try {
+            recognition.abort();
+        } catch (error) {
+            /* αγνοείται */
+        }
+        recognitionRunning = false;
+    }
+
+    shouldListen = true;
+    setTimeout(startRecognition, 800);
+}
+
+/* =========================================================
+   INITIAL STATUS
+   ========================================================= */
+
+statusDot.classList.add("listening");
+statusText.innerText = "Περιμένω τη λέξη «Γιάννη»...";
+
+</script>
+
+</body>
+</html>
