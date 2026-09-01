@@ -122,7 +122,6 @@
     </div>
 
     <script>
-        // --- 3D LARGE HUMAN FACE AVATAR SETUP (Three.js) ---
         const container = document.getElementById("avatar-canvas-container");
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
@@ -166,21 +165,13 @@
         const irisGeo = new THREE.SphereGeometry(0.12, 16, 16);
         const irisMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7, emissiveIntensity: 0.5 });
 
-        // Αριστερό Μάτι
         const leftEyeGroup = new THREE.Group();
-        const lBg = new THREE.Mesh(eyeBgGeo, eyeBgMat);
-        const lIris = new THREE.Mesh(irisGeo, irisMat);
-        lIris.position.set(0, 0, 0.12);
-        leftEyeGroup.add(lBg, lIris);
+        leftEyeGroup.add(new THREE.Mesh(eyeBgGeo, eyeBgMat), Object.assign(new THREE.Mesh(irisGeo, irisMat), {position: {x:0, y:0, z:0.12}}));
         leftEyeGroup.position.set(-0.45, 0.35, 1.05);
         headGroup.add(leftEyeGroup);
 
-        // Δεξί Μάτι
         const rightEyeGroup = new THREE.Group();
-        const rBg = new THREE.Mesh(eyeBgGeo, eyeBgMat);
-        const rIris = new THREE.Mesh(irisGeo, irisMat);
-        rIris.position.set(0, 0, 0.12);
-        rightEyeGroup.add(rBg, rIris);
+        rightEyeGroup.add(new THREE.Mesh(eyeBgGeo, eyeBgMat), Object.assign(new THREE.Mesh(irisGeo, irisMat), {position: {x:0, y:0, z:0.12}}));
         rightEyeGroup.position.set(0.45, 0.35, 1.05);
         headGroup.add(rightEyeGroup);
 
@@ -230,7 +221,6 @@
         }
         animateAvatar();
 
-        // --- SPEECH & CHAT LOGIC ---
         const messagesDiv = document.getElementById("messages");
         const statusText = document.getElementById("status-text");
         const pulseDot = document.getElementById("pulseDot");
