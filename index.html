@@ -103,6 +103,17 @@
             color: var(--text-muted);
             font-weight: 500;
         }
+
+        @media (max-width: 600px) {
+            body { height: 100dvh; }
+            #app-container {
+                height: 100dvh;
+                max-width: none;
+                border-radius: 0;
+            }
+            #avatar-section { height: 46vh; min-height: 280px; }
+            #messages { max-height: 24vh; }
+        }
     </style>
 </head>
 <body>
@@ -221,6 +232,18 @@
         }
         animateAvatar();
 
+        function resizeAvatar() {
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            if (!width || !height) return;
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height, false);
+        }
+
+        window.addEventListener("resize", resizeAvatar);
+        resizeAvatar();
+
         const messagesDiv = document.getElementById("messages");
         const statusText = document.getElementById("status-text");
         const pulseDot = document.getElementById("pulseDot");
@@ -231,6 +254,9 @@
         let conversationHistory = [];
         let recognition = null;
         let selectedVoice = null;
+        let recognitionShouldRun = true;
+        let commandInProgress = false;
+        let restartTimer = null;
 
         function loadVoices() {
             const voices = window.speechSynthesis.getVoices();
@@ -247,7 +273,10 @@
 
         function appendMessage(role, text) {
             const className = role === 'user' ? 'user' : 'assistant';
-            messagesDiv.innerHTML += `<div class="message ${className}">${text}</div>`;
+            const message = document.createElement("div");
+            message.className = `message ${className}`;
+            message.textContent = text;
+            messagesDiv.appendChild(message);
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
 
@@ -256,6 +285,7 @@
             isAssistantSpeaking = false;
             isTalking = false;
             isListeningActive = false;
+            commandInProgress = false;
             pulseDot.classList.remove('active');
             statusText.innerText = "Περιμένω τη λέξη «Γιάννη»...";
         }
@@ -271,16 +301,19 @@
             if (selectedVoice) utterance.voice = selectedVoice;
             utterance.lang = 'el-GR';
             utterance.rate = 1.05;
+            utterance.pitch = 1;
 
-            utterance.onend = () => {
+            const finished = () => {
                 isAssistantSpeaking = false;
                 isTalking = false;
                 isListeningActive = false;
+                commandInProgress = false;
                 pulseDot.classList.remove('active');
                 statusText.innerText = "Περιμένω τη λέξη «Γιάννη»...";
             };
 
-            utterance.onerror = utterance.onend;
+            utterance.onend = finished;
+            utterance.onerror = finished;
             window.speechSynthesis.speak(utterance);
         }
 
@@ -288,83 +321,164 @@
             return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
         }
 
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const SpeechRecognition =
+            window.SpeechRecognition || window.webkitSpeechRecognition;
+
+        function scheduleRecognitionRestart() {
+            if (!recognition || !recognitionShouldRun || isAssistantSpeaking) return;
+            clearTimeout(restartTimer);
+            restartTimer = setTimeout(() => {
+                try { recognition.start(); } catch (e) {}
+            }, 250);
+        }
+
+        function normalizeGreek(text) {
+            return text
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .toLowerCase()
+                .replace(/ς/g, "σ")
+                .trim();
+        }
+
+        function removeWakeWord(text) {
+            // Αφαιρούμε τη λέξη αφύπνισης από το κανονικοποιημένο κείμενο,
+            // ώστε να λειτουργεί είτε με είτε χωρίς τόνους.
+            return text
+                .replace(/\bγιαννη\b/g, "")
+                .replace(/\bγιαννησ\b/g, "")
+                .replace(/\s+/g, " ")
+                .trim();
+        }
+
+        async function processCommand(query) {
+            if (commandInProgress || !query || query.trim().length < 2) return;
+
+            commandInProgress = true;
+            isListeningActive = false;
+            appendMessage('user', query);
+            conversationHistory.push({ role: "user", content: query });
+            conversationHistory = conversationHistory.slice(-5);
+
+            statusText.innerText = "Σκέφτομαι...";
+            pulseDot.classList.remove('active');
+
+            try {
+                const res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        messages: conversationHistory,
+                        location: userLocation
+                    })
+                });
+
+                const data = await res.json();
+
+                if (!res.ok) {
+                    throw new Error(data?.reply || "Σφάλμα server");
+                }
+
+                const reply = String(data.reply || "").trim();
+                if (!reply) throw new Error("Κενή απάντηση");
+
+                appendMessage('assistant', reply);
+                conversationHistory.push({ role: "assistant", content: reply });
+                conversationHistory = conversationHistory.slice(-5);
+
+                speak(reply);
+            } catch (err) {
+                console.error(err);
+                commandInProgress = false;
+                statusText.innerText = "Σφάλμα σύνδεσης.";
+                setTimeout(() => {
+                    if (!isAssistantSpeaking) {
+                        statusText.innerText = "Περιμένω τη λέξη «Γιάννη»...";
+                    }
+                }, 1800);
+            }
+        }
+
         if (!SpeechRecognition) {
-            alert("Ο browser σου δεν υποστηρίζει φωνητική αναγνώριση.");
+            statusText.innerText = "Ο browser δεν υποστηρίζει φωνητική αναγνώριση.";
+            pulseDot.classList.remove('active');
         } else {
             recognition = new SpeechRecognition();
             recognition.lang = 'el-GR';
             recognition.continuous = true;
             recognition.interimResults = false;
+            recognition.maxAlternatives = 1;
 
             recognition.onresult = async (event) => {
-                if (isAssistantSpeaking) return;
+                if (isAssistantSpeaking || commandInProgress) return;
 
-                const rawResult = event.results[event.results.length - 1][0].transcript.trim();
-                const speechResult = removeAccents(rawResult);
-                
-                if (!speechResult || speechResult.length < 2) return;
+                // Επεξεργαζόμαστε μόνο το πιο πρόσφατο τελικό αποτέλεσμα.
+                const result = event.results[event.results.length - 1];
+                if (!result || !result.isFinal) return;
 
-                if (speechResult.includes("σταματα") || speechResult.includes("στοπ")) {
+                const rawResult = result[0].transcript.trim();
+                const normalized = normalizeGreek(rawResult);
+
+                if (!normalized || normalized.length < 2) return;
+
+                // Το "σταμάτα/στοπ" έχει προτεραιότητα.
+                if (/\bσταματα\b/.test(normalized) || /\bστοπ\b/.test(normalized)) {
                     stopEverything();
-                    speak("Εντάξει, σταματάω.");
                     return;
                 }
 
                 if (!isListeningActive) {
-                    if (speechResult.includes("γιαννη") || speechResult.includes("γιαννης")) {
-                        isListeningActive = true;
-                        pulseDot.classList.add('active');
-                        statusText.innerText = 'Ενεργός - Πες την ερώτησή σου...';
-                        
-                        const cleanQuery = rawResult.replace(/γιάννη|γιάννης|γιαννη|γιαννης/gi, "").trim();
-                        if (cleanQuery.length > 2) {
-                            processCommand(cleanQuery);
-                        }
+                    const hasWakeWord =
+                        /\bγιαννη\b/.test(normalized) ||
+                        /\bγιαννησ\b/.test(normalized);
+
+                    if (!hasWakeWord) return;
+
+                    isListeningActive = true;
+                    pulseDot.classList.add('active');
+                    statusText.innerText = "Ενεργός — πες την ερώτησή σου...";
+
+                    // Αν ο χρήστης είπε «Γιάννη, τι ώρα είναι;» σε μία φράση,
+                    // εκτελούμε αμέσως το υπόλοιπο.
+                    const cleanQuery = removeWakeWord(normalized);
+
+                    if (cleanQuery.length > 2) {
+                        await processCommand(cleanQuery);
                     }
+
                     return;
                 }
 
-                if (isListeningActive) {
-                    isListeningActive = false;
-                    processCommand(rawResult);
-                }
+                // Είμαστε ήδη ενεργοί: το επόμενο αποτέλεσμα είναι η εντολή.
+                await processCommand(rawResult);
             };
 
-            async function processCommand(query) {
-                appendMessage('user', query);
-                conversationHistory.push({ role: "user", content: query });
-                statusText.innerText = "Σκέφτομαι...";
-                pulseDot.classList.remove('active');
+            recognition.onerror = (event) => {
+                console.warn("SpeechRecognition:", event.error);
 
-                try {
-                    const res = await fetch('/api/chat', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ messages: conversationHistory, location: userLocation })
-                    });
-                    const data = await res.json();
-
-                    appendMessage('assistant', data.reply);
-                    conversationHistory.push({ role: "assistant", content: data.reply });
-
-                    speak(data.reply);
-                } catch (err) {
-                    statusText.innerText = "Σφάλμα σύνδεσης.";
-                    isListeningActive = false;
+                if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+                    recognitionShouldRun = false;
+                    statusText.innerText = "Χρειάζεται άδεια μικροφώνου.";
+                    return;
                 }
-            }
+
+                if (event.error === "aborted") return;
+                scheduleRecognitionRestart();
+            };
 
             recognition.onend = () => {
-                if (!isAssistantSpeaking) {
-                    try { recognition.start(); } catch (e) {}
+                if (recognitionShouldRun && !isAssistantSpeaking) {
+                    scheduleRecognitionRestart();
                 }
             };
 
+            // Αν ο browser σταματήσει προσωρινά την αναγνώριση, την ξαναξεκινάμε.
             try {
                 recognition.start();
                 statusText.innerText = "Περιμένω τη λέξη «Γιάννη»...";
-            } catch (e) {}
+            } catch (e) {
+                scheduleRecognitionRestart();
+            }
         }
     </script>
 </body>
