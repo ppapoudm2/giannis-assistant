@@ -42,32 +42,9 @@
             border: 1px solid rgba(255, 255, 255, 0.05);
         }
 
-        header {
-            padding: 15px 20px;
-            background: rgba(15, 23, 42, 0.8);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            z-index: 10;
-        }
-
-        header h2 {
-            margin: 0;
-            font-size: 18px;
-            color: var(--accent);
-        }
-
-        .header-info {
-            font-size: 13px;
-            color: var(--text-muted);
-            text-align: right;
-            line-height: 1.4;
-        }
-
         #avatar-section {
             width: 100%;
-            height: 380px;
+            height: 420px;
             background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
             position: relative;
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
@@ -86,7 +63,7 @@
             flex-direction: column;
             gap: 10px;
             scroll-behavior: smooth;
-            max-height: 200px;
+            max-height: 180px;
         }
 
         .message {
@@ -101,7 +78,7 @@
         .assistant { background: var(--assistant-bubble); color: var(--text-main); align-self: flex-start; border-bottom-left-radius: 4px; border: 1px solid rgba(255, 255, 255, 0.05); }
 
         #status-bar {
-            padding: 12px 20px;
+            padding: 14px 20px;
             background: rgba(15, 23, 42, 0.6);
             border-top: 1px solid rgba(255, 255, 255, 0.05);
             display: flex;
@@ -131,14 +108,7 @@
 <body>
 
     <div id="app-container">
-        <header>
-            <h2>✨ Γιάννης AI</h2>
-            <div class="header-info" id="headerInfo">
-                <div>Πόλη: Εντοπισμός...</div>
-                <div>Υπόλοιπο: <span id="remainingTokens">10000</span> | Τραβήχτηκαν: <span id="currentTokens">0</span></div>
-            </div>
-        </header>
-
+        <!-- 3D Πρόσωπο -->
         <div id="avatar-section">
             <div id="avatar-canvas-container"></div>
         </div>
@@ -152,6 +122,7 @@
     </div>
 
     <script>
+        // --- 3D LARGE HUMAN FACE AVATAR SETUP (Three.js) ---
         const container = document.getElementById("avatar-canvas-container");
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
@@ -195,13 +166,21 @@
         const irisGeo = new THREE.SphereGeometry(0.12, 16, 16);
         const irisMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7, emissiveIntensity: 0.5 });
 
+        // Αριστερό Μάτι
         const leftEyeGroup = new THREE.Group();
-        leftEyeGroup.add(new THREE.Mesh(eyeBgGeo, eyeBgMat), Object.assign(new THREE.Mesh(irisGeo, irisMat), {position: {x:0, y:0, z:0.12}}));
+        const lBg = new THREE.Mesh(eyeBgGeo, eyeBgMat);
+        const lIris = new THREE.Mesh(irisGeo, irisMat);
+        lIris.position.set(0, 0, 0.12);
+        leftEyeGroup.add(lBg, lIris);
         leftEyeGroup.position.set(-0.45, 0.35, 1.05);
         headGroup.add(leftEyeGroup);
 
+        // Δεξί Μάτι
         const rightEyeGroup = new THREE.Group();
-        rightEyeGroup.add(new THREE.Mesh(eyeBgGeo, eyeBgMat), Object.assign(new THREE.Mesh(irisGeo, irisMat), {position: {x:0, y:0, z:0.12}}));
+        const rBg = new THREE.Mesh(eyeBgGeo, eyeBgMat);
+        const rIris = new THREE.Mesh(irisGeo, irisMat);
+        rIris.position.set(0, 0, 0.12);
+        rightEyeGroup.add(rBg, rIris);
         rightEyeGroup.position.set(0.45, 0.35, 1.05);
         headGroup.add(rightEyeGroup);
 
@@ -251,19 +230,12 @@
         }
         animateAvatar();
 
+        // --- SPEECH & CHAT LOGIC ---
         const messagesDiv = document.getElementById("messages");
         const statusText = document.getElementById("status-text");
         const pulseDot = document.getElementById("pulseDot");
-        const remainingTokensEl = document.getElementById("remainingTokens");
-        const currentTokensEl = document.getElementById("currentTokens");
-        const headerInfo = document.getElementById("headerInfo");
-
-        const INITIAL_LIMIT = 10000;
-        let savedRemaining = localStorage.getItem('giannis_remaining_tokens');
-        let totalRemainingTokens = savedRemaining !== null ? parseInt(savedRemaining) : INITIAL_LIMIT;
 
         let userLocation = null;
-        let detectedCity = "Κόρινθος";
         let isListeningActive = false;
         let isAssistantSpeaking = false;
         let conversationHistory = [];
@@ -278,23 +250,10 @@
         loadVoices();
 
         if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(async (pos) => {
+            navigator.geolocation.getCurrentPosition((pos) => {
                 userLocation = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-                try {
-                    const res = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${userLocation.lat}&lon=${userLocation.lon}&accept-language=el`;
-                    const data = await (await fetch(res)).json();
-                    detectedCity = data.address.city || data.address.town || data.address.village || "Κόρινθος";
-                } catch (e) {}
-                updateTokenUI(0);
-            }, () => { updateTokenUI(0); });
+            }, () => {});
         }
-
-        function updateTokenUI(latestUsage = 0) {
-            remainingTokensEl.innerText = totalRemainingTokens;
-            currentTokensEl.innerText = latestUsage;
-            headerInfo.children[0].innerText = `Πόλη: ${detectedCity}`;
-        }
-        updateTokenUI(0);
 
         function appendMessage(role, text) {
             const className = role === 'user' ? 'user' : 'assistant';
@@ -326,7 +285,7 @@
             utterance.onend = () => {
                 isAssistantSpeaking = false;
                 isTalking = false;
-                isListeningActive = false; // Επαναφορά σε κατάσταση αναμονής για «Γιάννη»
+                isListeningActive = false;
                 pulseDot.classList.remove('active');
                 statusText.innerText = "Περιμένω τη λέξη «Γιάννη»...";
             };
@@ -356,15 +315,12 @@
                     return;
                 }
 
-                // Αν δεν είναι ενεργός, περιμένει το «Γιάννη»
                 if (!isListeningActive) {
                     if (speechResult.includes("γιάννη") || speechResult.includes("γιάννης")) {
                         isListeningActive = true;
                         pulseDot.classList.add('active');
                         statusText.innerText = 'Ενεργός - Πες την ερώτησή σου...';
                         
-                        // Αφαίρεση της καθυστέρησης του «Ακούω»: 
-                        // Αν η πρόταση περιέχει κάτι παραπάνω από το όνομα, το επεξεργάζεται αμέσως!
                         const cleanQuery = speechResult.replace(/γιάννη|γιάννης/g, "").trim();
                         if (cleanQuery.length > 2) {
                             processCommand(cleanQuery);
@@ -373,7 +329,6 @@
                     return;
                 }
 
-                // Αν είναι ήδη ενεργός, εκτελεί την εντολή άμεσα
                 if (isListeningActive) {
                     isListeningActive = false;
                     processCommand(speechResult);
@@ -393,14 +348,6 @@
                         body: JSON.stringify({ messages: conversationHistory, location: userLocation })
                     });
                     const data = await res.json();
-
-                    let promptTokens = 0;
-                    if (data.usage && data.usage.total_tokens) {
-                        promptTokens = data.usage.total_tokens;
-                        totalRemainingTokens = Math.max(0, totalRemainingTokens - promptTokens);
-                        localStorage.setItem('giannis_remaining_tokens', totalRemainingTokens);
-                        updateTokenUI(promptTokens);
-                    }
 
                     appendMessage('assistant', data.reply);
                     conversationHistory.push({ role: "assistant", content: data.reply });
