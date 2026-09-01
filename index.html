@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Γιάννης - Προσωπικός Βοηθός</title>
+    <!-- Ενσωμάτωση Three.js για το 3D Avatar -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         :root {
             --bg-color: #0f172a;
@@ -41,12 +43,22 @@
         }
 
         header {
-            padding: 20px;
+            padding: 15px 20px;
             background: rgba(15, 23, 42, 0.6);
             display: flex;
-            justify-content: flex-end;
+            justify-content: space-between;
             align-items: center;
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        /* Στυλ για το 3D Canvas / Avatar */
+        #avatar-container {
+            width: 120px;
+            height: 90px;
+            background: radial-gradient(circle, #334155 0%, #0f172a 100%);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid rgba(56, 189, 248, 0.2);
         }
 
         .header-info {
@@ -109,6 +121,8 @@
 
     <div id="app-container">
         <header>
+            <!-- 3D Avatar Container -->
+            <div id="avatar-container"></div>
             <div class="header-info" id="headerInfo">
                 <div>Πόλη: Εντοπισμός...</div>
                 <div>Υπόλοιπο: <span id="remainingTokens">10000</span> | Τραβήχτηκαν: <span id="currentTokens">0</span></div>
@@ -124,6 +138,76 @@
     </div>
 
     <script>
+        // --- 3D AVATAR SETUP (Three.js) ---
+        const avatarContainer = document.getElementById("avatar-container");
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(45, avatarContainer.clientWidth / avatarContainer.clientHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(avatarContainer.clientWidth, avatarContainer.clientHeight);
+        avatarContainer.appendChild(renderer.domElement);
+
+        // Φωτισμός
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+        scene.add(ambientLight);
+        const pointLight = new THREE.PointLight(0x38bdf8, 1);
+        pointLight.position.set(5, 5, 5);
+        scene.add(pointLight);
+
+        // Δημιουργία κεφαλιού (3D Avatar)
+        const headGroup = new THREE.Group();
+        
+        // Κύριο σώμα κεφαλιού
+        const headGeo = new THREE.SphereGeometry(1.1, 32, 32);
+        const headMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.4, metalness: 0.2 });
+        const headMesh = new THREE.Mesh(headGeo, headMat);
+        headGroup.add(headMesh);
+
+        // Μάτια
+        const eyeGeo = new THREE.SphereGeometry(0.15, 16, 16);
+        const eyeMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7 });
+        
+        const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+        leftEye.position.set(-0.35, 0.3, 0.95);
+        headGroup.add(leftEye);
+
+        const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+        rightEye.position.set(0.35, 0.3, 0.95);
+        headGroup.add(rightEye);
+
+        // Στόμα (για animation ομιλίας)
+        const mouthGeo = new THREE.BoxGeometry(0.5, 0.1, 0.2);
+        const mouthMat = new THREE.MeshStandardMaterial({ color: 0x0f172a });
+        const mouthMesh = new THREE.Mesh(mouthGeo, mouthMat);
+        mouthMesh.position.set(0, -0.4, 0.98);
+        headGroup.add(mouthMesh);
+
+        scene.add(headGroup);
+        camera.position.z = 4.2;
+
+        let clock = new THREE.Clock();
+        let isTalking = false;
+
+        // Render Loop & Animation
+        function animateAvatar() {
+            requestAnimationFrame(animateAvatar);
+            const elapsedTime = clock.getElapsedTime();
+
+            // Ήπια κίνηση αιώρησης (idle)
+            headGroup.rotation.y = Math.sin(elapsedTime * 1.5) * 0.1;
+            headGroup.rotation.x = Math.cos(elapsedTime * 1.2) * 0.05;
+
+            // Αν ο βοηθός μιλάει, ανοιγοκλείνει το στόμα γρήγορα
+            if (isTalking) {
+                mouthMesh.scale.y = 1 + Math.sin(elapsedTime * 25) * 2.5;
+            } else {
+                mouthMesh.scale.y = 1; // Κανονικό κλειστό στόμα
+            }
+
+            renderer.render(scene, camera);
+        }
+        animateAvatar();
+        // ----------------------------------
+
         const messagesDiv = document.getElementById("messages");
         const statusText = document.getElementById("status-text");
         const pulseDot = document.getElementById("pulseDot");
@@ -179,6 +263,7 @@
         function stopEverything() {
             window.speechSynthesis.cancel();
             isAssistantSpeaking = false;
+            isTalking = false;
             isListeningActive = false;
             isWaitingForCommand = false;
             pulseDot.classList.remove('active');
@@ -188,6 +273,7 @@
         function speak(text, callback) {
             window.speechSynthesis.cancel();
             isAssistantSpeaking = true;
+            isTalking = true; // Ενεργοποίηση κίνησης στόματος στο 3D avatar
             pulseDot.classList.remove('active');
             statusText.innerText = "Ο Γιάννης μιλάει...";
 
@@ -206,6 +292,7 @@
                 if (isFinished) return;
                 isFinished = true;
                 isAssistantSpeaking = false;
+                isTalking = false; // Απενεργοποίηση κίνησης στόματος
 
                 if (recognition) {
                     try { recognition.start(); } catch (e) {}
