@@ -2,13 +2,12 @@ import express from 'express';
 
 const app = express();
 app.use(express.json());
-app.use(express.static('.')); // Εξυπηρετεί το index.html και τα στατικά αρχεία
+app.use(express.static('.'));
 
 app.post('/api/chat', async (req, res) => {
     try {
         let { messages, location } = req.body;
 
-        // Κράτημα μόνο των τελευταίων 5 μηνυμάτων για γρηγορότερη απόκριση
         if (messages && messages.length > 5) {
             messages = messages.slice(-5);
         }
@@ -36,16 +35,21 @@ app.post('/api/chat', async (req, res) => {
 
         const data = await response.json();
         
+        if (!response.ok) {
+            console.error("XAI API Error Response:", data);
+            throw new Error(data.error?.message || "Σφάλμα από το API του x.ai");
+        }
+
         if (!data.choices || !data.choices[0]) {
             throw new Error("Μη έγκυρη απάντηση από το API");
         }
 
         const reply = data.choices[0].message.content;
-
         res.json({ reply, usage: data.usage });
+
     } catch (error) {
-        console.error("Σφάλμα API:", error);
-        res.status(500).json({ reply: "Σφάλμα στον server." });
+        console.error("Λεπτομέρειες Σφάλματος Server:", error.message);
+        res.status(500).json({ reply: "Σφάλμα επικοινωνίας με τον server." });
     }
 });
 
