@@ -1,95 +1,56 @@
-import express from 'express';
+import express from "express";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const XAI_API_KEY = process.env.XAI_API_KEY || process.env.GROK_API_KEY;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-app.use(express.json({ limit: '1mb' }));
-app.use(express.static('.'));
+app.use(express.json());
+app.use(express.static("."));
 
-app.post('/api/chat', async (req, res) => {
-    try {
-        let { messages } = req.body;
+app.post("/api/chat", async (req, res) => {
+  try {
+    const { messages } = req.body;
 
-        if (!Array.isArray(messages) || messages.length === 0) {
-            return res.status(400).json({
-                reply: "Δεν έλαβα ερώτηση."
-            });
-        }
-
-        if (!XAI_API_KEY) {
-            return res.status(500).json({
-                reply: "Δεν έχει ρυθμιστεί το XAI_API_KEY στον server."
-            });
-        }
-
-        // Κρατάμε μόνο το πρόσφατο ιστορικό.
-        messages = messages
-            .filter(
-                m =>
-                    m &&
-                    (m.role === 'user' || m.role === 'assistant') &&
-                    typeof m.content === 'string'
-            )
-            .slice(-5);
-
-        const systemPrompt = {
-            role: "system",
-            content:
-                "Είσαι ο Γιάννης, ένας φιλικός προσωπικός φωνητικός βοηθός. " +
-                "Απάντησε στα ελληνικά, φυσικά και εξαιρετικά σύντομα: το πολύ 1-2 προτάσεις. " +
-                "Μην χρησιμοποιείς markdown, λίστες ή περιττές αναλύσεις, επειδή η απάντηση θα εκφωνηθεί."
-        };
-
-        const response = await fetch(
-            'https://api.x.ai/v1/chat/completions',
+    const response = await fetch(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${OPENAI_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: "gpt-4o",
+          messages: [
             {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${XAI_API_KEY}`
-                },
-                body: JSON.stringify({
-                    model: "grok-4.6",
-                    messages: [systemPrompt, ...messages],
-                    max_tokens: 120,
-                    temperature: 0.7
-                })
-            }
-        );
+              role: "system",
+              content:
+                "Είσαι ο Γιάννης, ένας σύντομος ελληνόφωνος φωνητικός βοηθός. Απάναντα φυσικά και σύντομα."
+            },
+            ...(messages || [])
+          ],
+          temperature: 0.7,
+          max_tokens: 150
+        })
+      }
+    );
 
-        const data = await response.json();
+    const data = await response.json();
 
-        if (!response.ok) {
-            console.error("xAI API error:", data);
+    const reply =
+      data?.choices?.[0]?.message?.content ||
+      "Δεν μπόρεσα να απαντήσω.";
 
-            return res.status(response.status).json({
-                reply:
-                    data?.error?.message ||
-                    "Σφάλμα επικοινωνίας με το xAI."
-            });
-        }
+    res.json({ reply });
 
-        const reply =
-            data?.choices?.[0]?.message?.content?.trim();
-
-        if (!reply) {
-            return res.status(502).json({
-                reply: "Δεν έλαβα απάντηση από το xAI."
-            });
-        }
-
-        res.json({ reply });
-
-    } catch (error) {
-        console.error("Server error:", error);
-
-        res.status(500).json({
-            reply: "Σφάλμα επικοινωνίας με τον server."
-        });
-    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      reply: "Σφάλμα επικοινωνίας με το ChatGPT."
+    });
+  }
 });
 
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
