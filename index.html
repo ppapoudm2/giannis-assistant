@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Γιάννης - Προσωπικός Βοηθός</title>
-    <!-- Ενσωμάτωση Three.js για το 3D Avatar -->
+    <!-- Three.js για το 3D Avatar -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         :root {
@@ -31,11 +31,11 @@
 
         #app-container {
             width: 100%;
-            max-width: 650px;
-            height: 90vh;
+            max-width: 750px;
+            height: 92vh;
             background: var(--card-bg);
             border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
             display: flex;
             flex-direction: column;
             overflow: hidden;
@@ -44,21 +44,18 @@
 
         header {
             padding: 15px 20px;
-            background: rgba(15, 23, 42, 0.6);
+            background: rgba(15, 23, 42, 0.8);
             display: flex;
             justify-content: space-between;
             align-items: center;
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            z-index: 10;
         }
 
-        /* Στυλ για το 3D Canvas / Avatar */
-        #avatar-container {
-            width: 120px;
-            height: 90px;
-            background: radial-gradient(circle, #334155 0%, #0f172a 100%);
-            border-radius: 12px;
-            overflow: hidden;
-            border: 1px solid rgba(56, 189, 248, 0.2);
+        header h2 {
+            margin: 0;
+            font-size: 18px;
+            color: var(--accent);
         }
 
         .header-info {
@@ -68,21 +65,36 @@
             line-height: 1.4;
         }
 
+        /* Κεντρικό section για το μεγάλο 3D Πρόσωπο */
+        #avatar-section {
+            width: 100%;
+            height: 380px;
+            background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
+            position: relative;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        #avatar-canvas-container {
+            width: 100%;
+            height: 100%;
+        }
+
         #messages {
             flex: 1;
             overflow-y: auto;
-            padding: 20px;
+            padding: 15px 20px;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 10px;
             scroll-behavior: smooth;
+            max-height: 200px;
         }
 
         .message {
-            padding: 12px 16px;
-            border-radius: 14px;
-            max-width: 75%;
-            font-size: 15px;
+            padding: 10px 14px;
+            border-radius: 12px;
+            max-width: 80%;
+            font-size: 14px;
             line-height: 1.4;
         }
 
@@ -90,8 +102,8 @@
         .assistant { background: var(--assistant-bubble); color: var(--text-main); align-self: flex-start; border-bottom-left-radius: 4px; border: 1px solid rgba(255, 255, 255, 0.05); }
 
         #status-bar {
-            padding: 15px 20px;
-            background: rgba(15, 23, 42, 0.4);
+            padding: 12px 20px;
+            background: rgba(15, 23, 42, 0.6);
             border-top: 1px solid rgba(255, 255, 255, 0.05);
             display: flex;
             align-items: center;
@@ -121,13 +133,17 @@
 
     <div id="app-container">
         <header>
-            <!-- 3D Avatar Container -->
-            <div id="avatar-container"></div>
+            <h2>✨ Γιάννης AI</h2>
             <div class="header-info" id="headerInfo">
                 <div>Πόλη: Εντοπισμός...</div>
                 <div>Υπόλοιπο: <span id="remainingTokens">10000</span> | Τραβήχτηκαν: <span id="currentTokens">0</span></div>
             </div>
         </header>
+
+        <!-- Μεγάλο 3D Πρόσωπο -->
+        <div id="avatar-section">
+            <div id="avatar-canvas-container"></div>
+        </div>
 
         <div id="messages"></div>
 
@@ -138,51 +154,109 @@
     </div>
 
     <script>
-        // --- 3D AVATAR SETUP (Three.js) ---
-        const avatarContainer = document.getElementById("avatar-container");
+        // --- 3D LARGE HUMAN FACE AVATAR SETUP (Three.js) ---
+        const container = document.getElementById("avatar-canvas-container");
         const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(45, avatarContainer.clientWidth / avatarContainer.clientHeight, 0.1, 1000);
+        const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        renderer.setSize(avatarContainer.clientWidth, avatarContainer.clientHeight);
-        avatarContainer.appendChild(renderer.domElement);
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
 
         // Φωτισμός
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
         scene.add(ambientLight);
-        const pointLight = new THREE.PointLight(0x38bdf8, 1);
-        pointLight.position.set(5, 5, 5);
-        scene.add(pointLight);
 
-        // Δημιουργία κεφαλιού (3D Avatar)
+        const frontLight = new THREE.DirectionalLight(0x38bdf8, 1.2);
+        frontLight.position.set(0, 2, 5);
+        scene.add(frontLight);
+
+        const backLight = new THREE.PointLight(0x0284c7, 2, 10);
+        backLight.position.set(0, -2, -2);
+        scene.add(backLight);
+
+        // Ομάδα κεφαλιού
         const headGroup = new THREE.Group();
+
+        // Κύριο κρανίο / πρόσωπο (ελαφρώς πεπλατυσμένο μπροστά για ανθρώπινη αίσθηση)
+        const faceGeo = new THREE.SphereGeometry(1.3, 32, 32);
+        faceGeo.scale(1, 1.3, 1.1);
+        const faceMat = new THREE.MeshStandardMaterial({ 
+            color: 0x283548, 
+            roughness: 0.35, 
+            metalness: 0.25 
+        });
+        const faceMesh = new THREE.Mesh(faceGeo, faceMat);
+        headGroup.add(faceMesh);
+
+        // Αυτιά
+        const earGeo = new THREE.CylinderGeometry(0.25, 0.2, 0.5, 16);
+        earGeo.rotateZ(Math.PI / 2);
+        const earMat = new THREE.MeshStandardMaterial({ color: 0x222d3d, roughness: 0.5 });
         
-        // Κύριο σώμα κεφαλιού
-        const headGeo = new THREE.SphereGeometry(1.1, 32, 32);
-        const headMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.4, metalness: 0.2 });
-        const headMesh = new THREE.Mesh(headGeo, headMat);
-        headGroup.add(headMesh);
+        const leftEar = new THREE.Mesh(earGeo, earMat);
+        leftEar.position.set(-1.25, 0.1, 0);
+        headGroup.add(leftEar);
 
-        // Μάτια
-        const eyeGeo = new THREE.SphereGeometry(0.15, 16, 16);
-        const eyeMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7 });
+        const rightEar = new THREE.Mesh(earGeo, earMat);
+        rightEar.position.set(1.25, 0.1, 0);
+        headGroup.add(rightEar);
+
+        // Μάτια (Βολβοί & Ίριδες)
+        const eyeBgGeo = new THREE.SphereGeometry(0.22, 16, 16);
+        const eyeBgMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+
+        const irisGeo = new THREE.SphereGeometry(0.12, 16, 16);
+        const irisMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7, emissiveIntensity: 0.5 });
+
+        // Αριστερό Μάτι
+        const leftEyeGroup = new THREE.Group();
+        const lBg = new THREE.Mesh(eyeBgGeo, eyeBgMat);
+        const lIris = new THREE.Mesh(irisGeo, irisMat);
+        lIris.position.set(0, 0, 0.12);
+        leftEyeGroup.add(lBg, lIris);
+        leftEyeGroup.position.set(-0.45, 0.35, 1.05);
+        headGroup.add(leftEyeGroup);
+
+        // Δεξί Μάτι
+        const rightEyeGroup = new THREE.Group();
+        const rBg = new THREE.Mesh(eyeBgGeo, eyeBgMat);
+        const rIris = new THREE.Mesh(irisGeo, irisMat);
+        rIris.position.set(0, 0, 0.12);
+        rightEyeGroup.add(rBg, rIris);
+        rightEyeGroup.position.set(0.45, 0.35, 1.05);
+        headGroup.add(rightEyeGroup);
+
+        // Φρύδια
+        const browGeo = new THREE.BoxGeometry(0.4, 0.07, 0.1);
+        const browMat = new THREE.MeshStandardMaterial({ color: 0x1e293b });
         
-        const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
-        leftEye.position.set(-0.35, 0.3, 0.95);
-        headGroup.add(leftEye);
+        const leftBrow = new THREE.Mesh(browGeo, browMat);
+        leftBrow.position.set(-0.45, 0.65, 1.15);
+        leftBrow.rotation.z = -0.08;
+        headGroup.add(leftBrow);
 
-        const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
-        rightEye.position.set(0.35, 0.3, 0.95);
-        headGroup.add(rightEye);
+        const rightBrow = new THREE.Mesh(browGeo, browMat);
+        rightBrow.position.set(0.45, 0.65, 1.15);
+        rightBrow.rotation.z = 0.08;
+        headGroup.add(rightBrow);
 
-        // Στόμα (για animation ομιλίας)
-        const mouthGeo = new THREE.BoxGeometry(0.5, 0.1, 0.2);
-        const mouthMat = new THREE.MeshStandardMaterial({ color: 0x0f172a });
+        // Μύτη
+        const noseGeo = new THREE.ConeGeometry(0.15, 0.4, 16);
+        noseGeo.rotateX(Math.PI / 2);
+        const noseMat = new THREE.MeshStandardMaterial({ color: 0x222d3d, roughness: 0.4 });
+        const nose = new THREE.Mesh(noseGeo, noseMat);
+        nose.position.set(0, 0.05, 1.25);
+        headGroup.add(nose);
+
+        // Στόμα (για δυναμικό Lip-sync animation)
+        const mouthGeo = new THREE.BoxGeometry(0.6, 0.12, 0.2);
+        const mouthMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.8 });
         const mouthMesh = new THREE.Mesh(mouthGeo, mouthMat);
-        mouthMesh.position.set(0, -0.4, 0.98);
+        mouthMesh.position.set(0, -0.5, 1.15);
         headGroup.add(mouthMesh);
 
         scene.add(headGroup);
-        camera.position.z = 4.2;
+        camera.position.z = 4.0;
 
         let clock = new THREE.Clock();
         let isTalking = false;
@@ -192,13 +266,13 @@
             requestAnimationFrame(animateAvatar);
             const elapsedTime = clock.getElapsedTime();
 
-            // Ήπια κίνηση αιώρησης (idle)
-            headGroup.rotation.y = Math.sin(elapsedTime * 1.5) * 0.1;
-            headGroup.rotation.x = Math.cos(elapsedTime * 1.2) * 0.05;
+            // Φυσική ήπια κίνηση κεφαλιού (idle breathing / floating)
+            headGroup.rotation.y = Math.sin(elapsedTime * 1.2) * 0.12;
+            headGroup.rotation.x = Math.cos(elapsedTime * 1.0) * 0.06;
 
-            // Αν ο βοηθός μιλάει, ανοιγοκλείνει το στόμα γρήγορα
+            // Αν ο βοηθός μιλάει, το στόμα ανοιγοκλείνει ρυθμικά
             if (isTalking) {
-                mouthMesh.scale.y = 1 + Math.sin(elapsedTime * 25) * 2.5;
+                mouthMesh.scale.y = 1 + Math.abs(Math.sin(elapsedTime * 22)) * 3.5;
             } else {
                 mouthMesh.scale.y = 1; // Κανονικό κλειστό στόμα
             }
@@ -206,7 +280,7 @@
             renderer.render(scene, camera);
         }
         animateAvatar();
-        // ----------------------------------
+        // ----------------------------------------------------
 
         const messagesDiv = document.getElementById("messages");
         const statusText = document.getElementById("status-text");
@@ -273,7 +347,7 @@
         function speak(text, callback) {
             window.speechSynthesis.cancel();
             isAssistantSpeaking = true;
-            isTalking = true; // Ενεργοποίηση κίνησης στόματος στο 3D avatar
+            isTalking = true; // Ενεργοποίηση κίνησης στόματος στο 3D πρόσωπο
             pulseDot.classList.remove('active');
             statusText.innerText = "Ο Γιάννης μιλάει...";
 
@@ -292,7 +366,7 @@
                 if (isFinished) return;
                 isFinished = true;
                 isAssistantSpeaking = false;
-                isTalking = false; // Απενεργοποίηση κίνησης στόματος
+                isTalking = false; // Σταμάτημα κίνησης στόματος
 
                 if (recognition) {
                     try { recognition.start(); } catch (e) {}
