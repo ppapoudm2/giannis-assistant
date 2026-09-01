@@ -9,34 +9,13 @@ app.use(express.static("."));
 
 app.post("/api/chat", async (req, res) => {
   try {
-    let { messages } = req.body;
-
-    if (!Array.isArray(messages) || messages.length === 0) {
-      return res.status(400).json({
-        reply: "Δεν έλαβα ερώτηση."
-      });
-    }
+    const messages = req.body.messages || [];
 
     if (!OPENAI_API_KEY) {
       return res.status(500).json({
-        reply: "Δεν έχει ρυθμιστεί το OPENAI_API_KEY."
+        reply: "Δεν βρέθηκε OPENAI_API_KEY."
       });
     }
-
-    messages = messages
-      .filter(
-        m =>
-          m &&
-          (m.role === "user" || m.role === "assistant") &&
-          typeof m.content === "string"
-      )
-      .slice(-10);
-
-    const systemPrompt = {
-      role: "system",
-      content:
-        "Είσαι ο Γιάννης, ένας φιλικός προσωπικός φωνητικός βοηθός. Απαντάς πάντα στα ελληνικά με σύντομες φυσικές απαντήσεις κατάλληλες για εκφώνηση."
-    };
 
     const response = await fetch(
       "https://api.openai.com/v1/chat/completions",
@@ -47,10 +26,17 @@ app.post("/api/chat", async (req, res) => {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          model: "gpt-4o-mini",
-          messages: [systemPrompt, ...messages],
+          model: "gpt-4o",
           temperature: 0.7,
-          max_tokens: 150
+          max_tokens: 150,
+          messages: [
+            {
+              role: "system",
+              content:
+                "Είσαι ο Γιάννης, ένας ελληνόφωνος φωνητικός βοηθός. Να απαντάς σύντομα, φυσικά και στα ελληνικά. Μέχρι 2 μικρές προτάσεις."
+            },
+            ...messages.slice(-10)
+          ]
         })
       }
     );
@@ -60,21 +46,22 @@ app.post("/api/chat", async (req, res) => {
     if (!response.ok) {
       console.error(data);
 
-      return res.status(response.status).json({
-        reply: data?.error?.message || "Σφάλμα OpenAI."
+      return res.status(500).json({
+        reply: "Σφάλμα OpenAI."
       });
     }
 
     const reply =
       data?.choices?.[0]?.message?.content?.trim() ||
-      "Δεν έχω απάντηση.";
+      "Δεν έχω απάντηση αυτή τη στιγμή.";
 
     res.json({ reply });
-  } catch (error) {
-    console.error(error);
+
+  } catch (err) {
+    console.error(err);
 
     res.status(500).json({
-      reply: "Σφάλμα server."
+      reply: "Σφάλμα επικοινωνίας με τον server."
     });
   }
 });
