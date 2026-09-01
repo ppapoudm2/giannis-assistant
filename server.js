@@ -1,88 +1,41 @@
-import express from 'express';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import OpenAI from 'openai';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const app = express();
-const port = process.env.PORT || 3000;
-
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY
-});
-
-app.use(express.json());
-app.use(express.static(__dirname));
-
 app.post('/api/chat', async (req, res) => {
     try {
-        const { messages, location } = req.body;
+        let { messages, location } = req.body;
 
-        let locationString = "Άγνωστη τοποθεσία";
-        if (location && location.lat && location.lon) {
-            locationString = `Γεωγραφικό πλάτος: ${location.lat}, Μήκος: ${location.lon}`;
+        // 1. Κρατάμε μόνο τα τελευταία 5 μηνύματα για να μην καθυστερεί η αποστολή/επεξεργασία
+        if (messages && messages.length > 5) {
+            messages = messages.slice(-5);
         }
 
-        const lastUserMessage = messages[messages.length - 1]?.content || "";
-        
-        let webSearchResults = "";
-        if (lastUserMessage.length > 2) {
-            try {
-                const encodedQuery = encodeURIComponent(lastUserMessage);
-                const response = await fetch(`https://api.duckduckgo.com/?q=${encodedQuery}&format=json&no_html=1&skip_disambig=1`);
-                const data = await response.json();
-                
-                let snippets = [];
-                if (data.AbstractText) {
-                    snippets.push(data.AbstractText);
-                }
-                if (data.RelatedTopics && data.RelatedTopics.length > 0) {
-                    data.RelatedTopics.slice(0, 3).forEach(topic => {
-                        if (topic.Text) snippets.push(topic.Text);
-                    });
-                }
-
-                if (snippets.length > 0) {
-                    webSearchResults = "Πληροφορίες από το internet:\n- " + snippets.join("\n- ");
-                }
-            } catch (searchError) {
-                console.error("Σφάλμα κατά την αναζήτηση web:", searchError);
-            }
-        }
-
+        // 2. Προσθέτουμε σύστημα οδηγιών για εξαιρετικά σύντομες απαντήσεις (1-2 προτάσεις)
         const systemPrompt = {
             role: "system",
-            content: `Εσύ είσαι ο Γιάννης, ένας προσωπικός φωνητικός βοηθός. 
-Τρέχουσα τοποθεσία χρήστη: ${locationString}. 
-Τρέχουσα ημερομηνία και ώρα: ${new Date().toLocaleString('el-GR', { timeZone: 'Europe/Athens' })}.
-${webSearchResults}
-Να απαντάς σύντομα, άμεσα και φυσικά στα ελληνικά, σαν να μιλάς σε φωνητική συνομιλία. Αν υπάρχουν πληροφορίες από το internet παραπάνω, χρησιμοποίησέ τις για να απαντήσεις σωστά.`
+            content: "Είσαι ο Γιάννης, ένας φιλικός φωνητικός βοηθός. Απάντησε ΠΑΝΤΑ εξαιρετικά σύντομα, αυστηρά σε 1 έως 2 προτάσεις μέγιστο, χωρίς περιττές αναλύσεις, ώστε να διαβάζεται γρήγορα."
         };
 
-        const fullMessages = [systemPrompt, ...messages];
+        const apiMessages = [systemPrompt, ...messages];
 
-        const completion = await openai.chat.completions.create({
-            model: "gpt-4o",
-            messages: fullMessages,
-            temperature: 0.7,
+        // Κλήση στο API (π.χ. Grok / OpenAI compatible)
+        const response = await fetch('https://api.x.ai/v1/chat/completions', { // ή το endpoint που χρησιμοποιείς
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${process.env.GROK_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: "grok-beta", // ή το μοντέλο σου
+                messages: apiMessages,
+                max_tokens: 100, // Περιορισμός μεγέθους απάντησης σε tokens
+                temperature: 0.7
+            })
         });
 
-        const reply = completion.choices[0].message.content;
-        const usage = completion.usage || { total_tokens: 0 };
+        const data = await response.json();
+        const reply = data.choices[0].message.content;
 
-        res.json({
-            reply: reply,
-            usage: usage
-        });
-
+        res.json({ reply, usage: data.usage });
     } catch (error) {
-        console.error("Σφάλμα στον server:", error);
-        res.status(500).json({ reply: "Συνέβη κάποιο σφάλμα σύνδεσης με τον διακομιστή.", usage: { total_tokens: 0 } });
+        console.error(error);
+        res.status(500).json({ reply: "Σφάλμα στον server." });
     }
-});
-
-app.listen(port, () => {
-    console.log(`Ο server τρέχει στη θύρα ${port}`);
 });
