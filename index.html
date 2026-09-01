@@ -284,6 +284,10 @@
             window.speechSynthesis.speak(utterance);
         }
 
+        function removeAccents(str) {
+            return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+        }
+
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
             alert("Ο browser σου δεν υποστηρίζει φωνητική αναγνώριση.");
@@ -296,22 +300,24 @@
             recognition.onresult = async (event) => {
                 if (isAssistantSpeaking) return;
 
-                const speechResult = event.results[event.results.length - 1][0].transcript.trim().toLowerCase();
+                const rawResult = event.results[event.results.length - 1][0].transcript.trim();
+                const speechResult = removeAccents(rawResult);
+                
                 if (!speechResult || speechResult.length < 2) return;
 
-                if (speechResult.includes("σταμάτα") || speechResult.includes("στοπ")) {
+                if (speechResult.includes("σταματα") || speechResult.includes("στοπ")) {
                     stopEverything();
                     speak("Εντάξει, σταματάω.");
                     return;
                 }
 
                 if (!isListeningActive) {
-                    if (speechResult.includes("γιάννη") || speechResult.includes("γιάννης")) {
+                    if (speechResult.includes("γιαννη") || speechResult.includes("γιαννης")) {
                         isListeningActive = true;
                         pulseDot.classList.add('active');
                         statusText.innerText = 'Ενεργός - Πες την ερώτησή σου...';
                         
-                        const cleanQuery = speechResult.replace(/γιάννη|γιάννης/g, "").trim();
+                        const cleanQuery = rawResult.replace(/γιάννη|γιάννης|γιαννη|γιαννης/gi, "").trim();
                         if (cleanQuery.length > 2) {
                             processCommand(cleanQuery);
                         }
@@ -321,7 +327,7 @@
 
                 if (isListeningActive) {
                     isListeningActive = false;
-                    processCommand(speechResult);
+                    processCommand(rawResult);
                 }
             };
 
