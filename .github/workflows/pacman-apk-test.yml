@@ -1,7 +1,7 @@
-name: Pacman APK Test
+name: Signal Explorer Android APK
 on:
   push:
-    branches: [pacman-apk-permission-test-20261122]
+    branches: [wifi-bluetooth-scanner-20261122]
   workflow_dispatch:
 jobs:
   build:
@@ -21,5 +21,5 @@ jobs:
       - run: gradle :app:assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
         with:
-          name: pacman-test-apk
+          name: signal-explorer-apk
           path: pacman-test/app/build/outputs/apk/debug/app-debug.apk
