@@ -38,6 +38,6 @@ public class MainActivity extends Activity implements SensorEventListener {
    float x=ox+(px+.5f)*cell,y=oy+(py+.5f)*cell;float mouth=(float)(15+30*Math.abs(Math.sin(phase)));p.setColor(Color.YELLOW);c.drawArc(x-cell*.42f,y-cell*.42f,x+cell*.42f,y+cell*.42f,heading+mouth,360-2*mouth,true,p);p.setColor(Color.BLACK);c.drawCircle(x+cell*.04f,y-cell*.19f,cell*.055f,p);
    postInvalidateDelayed(16);
   }
-  @Override public boolean onTouchEvent(android.view.MotionEvent e){if(e.getAction()==MotionEvent.ACTION_UP){if(e.getY()<85){paused=!paused;last=System.currentTimeMillis();}else if(sensorAvailable){zeroX=tiltX;zeroY=tiltY;calibrated=true;}return true;}return true;}
+  @Override public boolean onTouchEvent(android.view.MotionEvent e){if(e.getAction()==MotionEvent.ACTION_UP){if(e.getY()<85){paused=!paused;last=System.currentTimeMillis();invalidate();}else if(sensorAvailable){zeroX=tiltX;zeroY=tiltY;calibrated=true;}return true;}return true;}
  }
 }
