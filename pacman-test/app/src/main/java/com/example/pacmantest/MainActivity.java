@@ -16,8 +16,8 @@ public class MainActivity extends Activity implements SensorEventListener {
  SensorManager sensors; Sensor accel; Game game; TextToSpeech speech; ToneGenerator tones;
  float tiltX=0,tiltY=0,tiltZ=0,zeroX=0,zeroY=0,zeroZ=0; boolean calibrated=false; boolean sensorAvailable=false;
  @Override public void onCreate(Bundle b){super.onCreate(b); sensors=(SensorManager)getSystemService(SENSOR_SERVICE);accel=sensors.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);sensorAvailable=accel!=null;tones=new ToneGenerator(AudioManager.STREAM_MUSIC,85);game=new Game(this);setContentView(game);speech=new TextToSpeech(this,status->{if(status==TextToSpeech.SUCCESS&&speech!=null){int lang=speech.setLanguage(new Locale("el","GR"));game.ttsReady=lang!=TextToSpeech.LANG_MISSING_DATA&&lang!=TextToSpeech.LANG_NOT_SUPPORTED;if(game.ttsReady)speech.speak("Βοήθεια! Έρχεται ο Μήτσος!",TextToSpeech.QUEUE_FLUSH,null,"start");}});}
- @Override protected void onResume(){super.onResume();if(accel!=null)sensors.registerListener(this,accel,SensorManager.SENSOR_DELAY_GAME);}
- @Override protected void onPause(){sensors.unregisterListener(this);super.onPause();}
+ @Override protected void onResume(){super.onResume();if(game!=null){game.last=System.currentTimeMillis();game.invalidate();}if(accel!=null)sensors.registerListener(this,accel,SensorManager.SENSOR_DELAY_GAME);}
+ @Override protected void onPause(){if(game!=null)game.paused=true;sensors.unregisterListener(this);super.onPause();}
  @Override protected void onDestroy(){if(speech!=null){speech.stop();speech.shutdown();}if(tones!=null)tones.release();super.onDestroy();}
  @Override public void onAccuracyChanged(Sensor s,int a){}
  @Override public void onSensorChanged(SensorEvent e){if(e.sensor.getType()!=Sensor.TYPE_ACCELEROMETER)return;tiltX=.8f*tiltX+.2f*e.values[0];tiltY=.8f*tiltY+.2f*e.values[1];tiltZ=.8f*tiltZ+.2f*e.values[2];if(!calibrated){zeroX=tiltX;zeroY=tiltY;zeroZ=tiltZ;calibrated=true;}}
@@ -68,6 +68,6 @@ public class MainActivity extends Activity implements SensorEventListener {
    if(now-lastHit<220&&lastHit>0){p.setColor(Color.argb((int)(95*(1-(now-lastHit)/220f)),255,45,65));c.drawRect(0,85,getWidth(),getHeight(),p);}if(now<turboUntil){p.setColor(Color.YELLOW);p.setTextSize(18);c.drawText("TURBO!",Math.max(12,getWidth()-90),45,p);}if(now<messageUntil){p.setColor(Color.YELLOW);p.setTextSize(20);c.drawText(message,15,Math.max(120,getHeight()-35),p);}
    if(System.currentTimeMillis()-levelStarted<1800){p.setColor(Color.YELLOW);p.setTextSize(Math.min(24f,Math.max(14f,getWidth()/17f)));c.drawText("ΕΠΙΠΕΔΟ "+level,Math.max(12,getWidth()/2-70),Math.max(120,getHeight()-20),p);}postInvalidateDelayed(16);
   }
-  @Override public boolean onTouchEvent(android.view.MotionEvent e){if(e.getAction()==MotionEvent.ACTION_UP){if(e.getY()<85){paused=!paused;last=System.currentTimeMillis();invalidate();}else if(sensorAvailable){zeroX=tiltX;zeroY=tiltY;zeroZ=tiltZ;calibrated=true;}return true;}return true;}
+  @Override public boolean onTouchEvent(android.view.MotionEvent e){if(e.getAction()==MotionEvent.ACTION_UP){if(e.getY()<85){paused=!paused;last=System.currentTimeMillis();if(paused)notifyGame("ΠΑΥΣΗ");else notifyGame("ΠΑΜΕ ΜΗΤΣΟ!");invalidate();}else if(sensorAvailable){zeroX=tiltX;zeroY=tiltY;zeroZ=tiltZ;calibrated=true;}return true;}return true;}
  }
 }
