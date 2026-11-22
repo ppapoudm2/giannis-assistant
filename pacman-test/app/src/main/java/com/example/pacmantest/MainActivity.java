@@ -36,8 +36,8 @@ public class MainActivity extends Activity {
  void startScan(){found.clear();wifiCount=0;bleCount=0;scan.setEnabled(false);status.setText("Σάρωση σε εξέλιξη (10 δευτερόλεπτα)…");output.setText("");
  LocationManager lm=(LocationManager)getSystemService(LOCATION_SERVICE);
  if(lm!=null&&!lm.isProviderEnabled(LocationManager.GPS_PROVIDER)&&!lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)){status.setText("Ενεργοποίησε την Τοποθεσία του κινητού για αποτελέσματα Wi-Fi.");}
- try { if(wifi!=null){boolean started=wifi.startScan();List<ScanResult> results=wifi.getScanResults();
- for(ScanResult r:results){String name=r.SSID==null||r.SSID.length()==0?"(κρυφό δίκτυο)":r.SSID;found.put("W:"+r.BSSID,"Wi-Fi  "+name+"\n"+r.BSSID+"   "+r.level+" dBm\n");wifiCount++;}
+ try { if(wifi!=null){boolean started=wifi.startScan();List<android.net.wifi.ScanResult> results=wifi.getScanResults();
+ for(android.net.wifi.ScanResult r:results){String name=r.SSID==null||r.SSID.length()==0?"(κρυφό δίκτυο)":r.SSID;found.put("W:"+r.BSSID,"Wi-Fi  "+name+"\n"+r.BSSID+"   "+r.level+" dBm\n");wifiCount++;}
  if(!started)status.setText("Το Android περιορίζει τις σαρώσεις Wi-Fi· εμφανίζονται πρόσφατα αποτελέσματα.");}}catch(Exception e){found.put("W:error","Wi-Fi: "+e.getClass().getSimpleName()+"\n");}
  try {if(bluetooth!=null&&bluetooth.isEnabled()){ble=bluetooth.getBluetoothLeScanner();
  if(ble!=null){callback=new ScanCallback(){@Override public void onScanResult(int type,android.bluetooth.le.ScanResult r){BluetoothDevice d=r.getDevice();String name="(άγνωστη συσκευή)";
