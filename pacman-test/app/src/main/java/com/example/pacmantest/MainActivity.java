@@ -38,12 +38,29 @@ public class MainActivity extends Activity implements SensorEventListener {
    }
    if(pelletsLeft==0){level++;reset();notifyGame(level%5==0?"BOSS LEVEL!":"ΕΠΙΠΕΔΟ "+level);}
   }
+  void drawGhost3D(Canvas c,float x,float y,float radius,int color,boolean big){
+   float bob=(float)Math.sin(phase*1.5f+x*.3f)*radius*.09f; y+=bob;
+   p.setShader(null);p.setStyle(Paint.Style.FILL);
+   p.setColor(Color.argb(115,0,0,0));c.drawOval(x-radius*.88f,y+radius*.82f,x+radius*.88f,y+radius*1.12f,p);
+   Path body=new Path();body.moveTo(x-radius,y+radius*.58f);body.lineTo(x-radius,y);
+   body.cubicTo(x-radius,y-radius*1.35f,x+radius,y-radius*1.35f,x+radius,y);
+   body.lineTo(x+radius,y+radius*.7f);
+   for(int k=3;k>=0;k--){float a=x-radius+(2*radius*k/4f);body.quadTo(a-radius*.24f,y+radius*(k%2==0?.95f:.5f),a-radius*.5f,y+radius*.68f);}
+   body.close();
+   int light=Color.rgb(Math.min(255,Color.red(color)+95),Math.min(255,Color.green(color)+95),Math.min(255,Color.blue(color)+95));
+   int dark=Color.rgb((int)(Color.red(color)*.35f),(int)(Color.green(color)*.35f),(int)(Color.blue(color)*.35f));
+   p.setShader(new RadialGradient(x-radius*.38f,y-radius*.56f,radius*1.8f,new int[]{Color.WHITE,light,color,dark},new float[]{0f,.23f,.57f,1f},Shader.TileMode.CLAMP));
+   c.drawPath(body,p);p.setShader(null);
+   p.setColor(Color.argb(95,255,255,255));c.drawOval(x-radius*.65f,y-radius*.76f,x-radius*.13f,y-radius*.38f,p);
+   for(int e=-1;e<=1;e+=2){float ex=x+e*radius*.35f,ey=y-radius*.12f;p.setColor(Color.WHITE);c.drawOval(ex-radius*.28f,ey-radius*.33f,ex+radius*.28f,ey+radius*.32f,p);p.setColor(Color.rgb(22,45,94));c.drawCircle(ex+radius*.07f,ey+radius*.06f,radius*.14f,p);p.setColor(Color.BLACK);c.drawCircle(ex+radius*.09f,ey+radius*.06f,radius*.075f,p);p.setColor(Color.WHITE);c.drawCircle(ex+radius*.04f,ey-radius*.02f,radius*.045f,p);}
+   if(big){p.setColor(Color.YELLOW);p.setTextSize(radius*.7f);p.setTextAlign(Paint.Align.CENTER);c.drawText("BOSS",x,y+radius*1.7f,p);p.setTextAlign(Paint.Align.LEFT);}
+  }
   @Override protected void onDraw(Canvas c){long now=System.currentTimeMillis();float dt=last==0?0:Math.min(.045f,(now-last)/1000f);last=now;step(dt);super.onDraw(c);c.drawColor(Color.rgb(7,7,19));float cell=Math.max(1f,Math.min(getWidth()/(float)W,(getHeight()-110f)/H));float ox=(getWidth()-W*cell)/2,oy=90;
    p.setTextSize(Math.min(32f,Math.max(16f,getWidth()/13f)));p.setColor(Color.WHITE);c.drawText("ΜΗΤΣΟΣ  "+score+"   LEVEL "+level+"   ΖΩΕΣ: "+lives,16,46,p);p.setTextSize(Math.min(17f,Math.max(11f,getWidth()/25f)));c.drawText(sensorAvailable?"Πάνω: παύση | Πίστα: βαθμονόμηση":"Δεν βρέθηκε αισθητήρας κλίσης",16,72,p);p.setTextSize(15);c.drawText("Τελείες: "+pelletsLeft,Math.max(12,getWidth()-140),72,p);p.setTextSize(13);c.drawText("ΡΕΚΟΡ: "+bestScore,Math.max(12,getWidth()-120),Math.max(88,getHeight()-8),p);if(paused){p.setColor(Color.YELLOW);p.setTextSize(24);c.drawText("ΠΑΥΣΗ",Math.max(12,getWidth()/2-45),Math.max(120,getHeight()-15),p);}
    for(int y=0;y<H;y++)for(int x=0;x<W;x++){float cx=ox+(x+.5f)*cell,cy=oy+(y+.5f)*cell;if(map[y][x]==1){p.setColor(Color.rgb(25,75,210));c.drawRoundRect(ox+x*cell+1,oy+y*cell+1,ox+(x+1)*cell-1,oy+(y+1)*cell-1,5,5,p);}else if(pellets[y][x]){p.setColor(Color.rgb(255,218,160));c.drawCircle(cx,cy,cell*.075f,p);}}
    if(fruitActive){p.setColor(Color.RED);c.drawCircle(ox+(fruitX+.3f)*cell,oy+(fruitY+.5f)*cell,cell*.21f,p);c.drawCircle(ox+(fruitX+.65f)*cell,oy+(fruitY+.5f)*cell,cell*.21f,p);p.setColor(Color.GREEN);c.drawLine(ox+(fruitX+.5f)*cell,oy+(fruitY+.3f)*cell,ox+(fruitX+.55f)*cell,oy+(fruitY+.08f)*cell,p);}
-   if(bossActive){float bx=ox+(bossX+.5f)*cell,by=oy+(bossY+.5f)*cell;p.setColor(Color.rgb(170,35,220));c.drawCircle(bx,by,cell*.7f,p);p.setColor(Color.WHITE);c.drawCircle(bx-cell*.23f,by-cell*.12f,cell*.16f,p);c.drawCircle(bx+cell*.23f,by-cell*.12f,cell*.16f,p);}
-   for(int i=0;i<gx.length;i++){float x=ox+(gx[i]+.5f)*cell,y=oy+(gy[i]+.5f)*cell;p.setColor(new int[]{Color.RED,Color.CYAN,Color.MAGENTA,Color.GREEN,Color.YELLOW}[i]);c.drawCircle(x,y,cell*.37f,p);c.drawRect(x-cell*.37f,y,x+cell*.37f,y+cell*.32f,p);p.setColor(Color.WHITE);c.drawCircle(x-cell*.13f,y-cell*.08f,cell*.10f,p);c.drawCircle(x+cell*.13f,y-cell*.08f,cell*.10f,p);}
+   if(bossActive){float bx=ox+(bossX+.5f)*cell,by=oy+(bossY+.5f)*cell;drawGhost3D(c,bx,by,cell*.67f,Color.rgb(165,40,235),true);}
+   for(int i=0;i<gx.length;i++){float x=ox+(gx[i]+.5f)*cell,y=oy+(gy[i]+.5f)*cell;drawGhost3D(c,x,y,cell*.43f,new int[]{Color.RED,Color.CYAN,Color.MAGENTA,Color.GREEN,Color.YELLOW}[i],false);}
    float x=ox+(px+.5f)*cell,y=oy+(py+.5f)*cell;float mouth=(float)(15+30*Math.abs(Math.sin(phase)));p.setColor(Color.YELLOW);if(face!=null){c.save();Path circle=new Path();circle.addCircle(x,y,cell*.49f,Path.Direction.CW);c.clipPath(circle);p.setColor(Color.WHITE);c.drawBitmap(face,null,new RectF(x-cell*.49f,y-cell*.49f,x+cell*.49f,y+cell*.49f),p);c.restore();p.setColor(Color.rgb(7,7,19));c.drawArc(x-cell*.44f,y-cell*.44f,x+cell*.44f,y+cell*.44f,heading-mouth,2*mouth,true,p);}else{c.drawArc(x-cell*.42f,y-cell*.42f,x+cell*.42f,y+cell*.42f,heading+mouth,360-2*mouth,true,p);p.setColor(Color.BLACK);c.drawCircle(x+cell*.04f,y-cell*.19f,cell*.055f,p);}
    if(now<turboUntil){p.setColor(Color.YELLOW);p.setTextSize(18);c.drawText("TURBO!",Math.max(12,getWidth()-90),45,p);}if(now<messageUntil){p.setColor(Color.YELLOW);p.setTextSize(20);c.drawText(message,15,Math.max(120,getHeight()-35),p);}
    if(System.currentTimeMillis()-levelStarted<1800){p.setColor(Color.YELLOW);p.setTextSize(Math.min(24f,Math.max(14f,getWidth()/17f)));c.drawText("ΕΠΙΠΕΔΟ "+level,Math.max(12,getWidth()/2-70),Math.max(120,getHeight()-20),p);}postInvalidateDelayed(16);
