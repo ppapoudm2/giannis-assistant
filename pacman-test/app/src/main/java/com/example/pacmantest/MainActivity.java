@@ -11,7 +11,7 @@ import java.util.*;
 public class MainActivity extends Activity implements SensorEventListener {
  SensorManager sensors; Sensor accel; Game game; TextToSpeech speech;
  float tiltX=0,tiltY=0,zeroX=0,zeroY=0; boolean calibrated=false;
- @Override public void onCreate(Bundle b){super.onCreate(b); sensors=(SensorManager)getSystemService(SENSOR_SERVICE);accel=sensors.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);game=new Game(this);setContentView(game);speech=new TextToSpeech(this,status->{if(status==TextToSpeech.SUCCESS)speech.setLanguage(new Locale("el","GR"));});}
+ @Override public void onCreate(Bundle b){super.onCreate(b); sensors=(SensorManager)getSystemService(SENSOR_SERVICE);accel=sensors.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);game=new Game(this);setContentView(game);speech=new TextToSpeech(this,status->{if(status==TextToSpeech.SUCCESS&&speech!=null)speech.setLanguage(new Locale("el","GR"));});}
  @Override protected void onResume(){super.onResume();if(accel!=null)sensors.registerListener(this,accel,SensorManager.SENSOR_DELAY_GAME);}
  @Override protected void onPause(){sensors.unregisterListener(this);super.onPause();}
  @Override protected void onDestroy(){if(speech!=null){speech.stop();speech.shutdown();}super.onDestroy();}
@@ -21,12 +21,12 @@ public class MainActivity extends Activity implements SensorEventListener {
   final int W=15,H=19; final int[][] map=new int[H][W]; final boolean[][] pellets=new boolean[H][W]; final Paint p=new Paint(3); final Random rng=new Random(7);
   float px=7,py=15; float[] gx={2,12,7},gy={2,2,9}; int score=0,level=1; long last=0,lastVoice=0; float phase=0;
   Game(Context c){super(c);setLayerType(View.LAYER_TYPE_SOFTWARE,null);reset();}
-  void reset(){for(int y=0;y<H;y++)for(int x=0;x<W;x++){boolean wall=x==0||y==0||x==W-1||y==H-1||(x%4==0&&y%5!=2&&y%5!=3&&y>2&&y<H-3)||(y%6==0&&x%5!=2&&x%5!=3&&x>2&&x<W-3);map[y][x]=wall?1:0;pellets[y][x]=!wall;}map[15][7]=0;map[9][7]=0;map[2][2]=0;map[2][12]=0;pellets[15][7]=false;}
+  void reset(){for(int y=0;y<H;y++)for(int x=0;x<W;x++){boolean wall=x==0||y==0||x==W-1||y==H-1||(x%4==0&&y%5!=2&&y%5!=3&&y>2&&y<H-3)||(y%6==0&&x%5!=2&&x%5!=3&&x>2&&x<W-3);map[y][x]=wall?1:0;pellets[y][x]=!wall;}map[15][7]=0;map[9][7]=0;map[2][2]=0;map[2][12]=0;pellets[15][7]=false;pellets[9][7]=false;pellets[2][2]=false;pellets[2][12]=false;}
   boolean free(int x,int y){return x>=0&&x<W&&y>=0&&y<H&&map[y][x]==0;}
   void move(float dx,float dy){float nx=px+dx,ny=py+dy;if(free(Math.round(nx),Math.round(py)))px=nx;if(free(Math.round(px),Math.round(ny)))py=ny;}
   void step(float dt){phase+=dt*9;float dx=-(tiltX-zeroX),dy=-(tiltY-zeroY);float dead=.65f;if(Math.abs(dx)<dead)dx=0;if(Math.abs(dy)<dead)dy=0;move(Math.max(-1,Math.min(1,dx/4))*dt*3,Math.max(-1,Math.min(1,dy/4))*dt*3);
    int ix=Math.round(px),iy=Math.round(py);if(free(ix,iy)&&pellets[iy][ix]){pellets[iy][ix]=false;score+=10;}
-   for(int i=0;i<gx.length;i++){float dist=(float)Math.hypot(px-gx[i],py-gy[i]);if(dist<1){score+=100;gx[i]=7;gy[i]=9;continue;}float best=-999;int bx=0,by=0;for(int[] d:new int[][]{{1,0},{-1,0},{0,1},{0,-1}}){int nx=Math.round(gx[i])+d[0],ny=Math.round(gy[i])+d[1];if(!free(nx,ny))continue;float v=(float)Math.hypot(nx-px,ny-py)+rng.nextFloat()*.8f;if(v>best){best=v;bx=d[0];by=d[1];}}gx[i]+=bx*dt*(.7f+level*.08f);gy[i]+=by*dt*(.7f+level*.08f);
+   for(int i=0;i<gx.length;i++){float dist=(float)Math.hypot(px-gx[i],py-gy[i]);if(dist<.7f){score+=100;gx[i]=i==0?2:(i==1?12:7);gy[i]=i==2?9:2;if(speech!=null)speech.speak("Ααα! Με έφαγε ο Μήτσος!",TextToSpeech.QUEUE_ADD,null,"eaten"+i);continue;}float best=-999;int bx=0,by=0;for(int[] d:new int[][]{{1,0},{-1,0},{0,1},{0,-1}}){int nx=Math.round(gx[i])+d[0],ny=Math.round(gy[i])+d[1];if(!free(nx,ny))continue;float v=(float)Math.hypot(nx-px,ny-py)+rng.nextFloat()*.8f;if(v>best){best=v;bx=d[0];by=d[1];}}float speed=dt*(.7f+level*.08f);float nextX=gx[i]+bx*speed,nextY=gy[i]+by*speed;if(free(Math.round(nextX),Math.round(nextY))){gx[i]=nextX;gy[i]=nextY;}
     if(dist<4&&System.currentTimeMillis()-lastVoice>9000&&speech!=null){lastVoice=System.currentTimeMillis();speech.speak("Βοήθεια! Έρχεται ο Μήτσος!",TextToSpeech.QUEUE_FLUSH,null,"ghost");}
    }
    boolean any=false;for(int y=0;y<H;y++)for(int x=0;x<W;x++)any|=pellets[y][x];if(!any){level++;reset();}
